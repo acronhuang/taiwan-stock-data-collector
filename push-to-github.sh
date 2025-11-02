@@ -11,7 +11,7 @@ if [ -z "$1" ]; then
     echo "❌ 請提供 GitHub 儲存庫 URL"
     echo ""
     echo "使用方法:"
-    echo "  $0 https://github.com/yourusername/taiwan-stock-data-collector.git"
+    echo "  $0 https://github.com/acronhuang/taiwan-stock-data-collector.git"
     echo ""
     echo "📝 步驟:"
     echo "1. 前往 https://github.com"
