@@ -1,6 +1,13 @@
 # 🚀 智能台股資料收集系統
 
+[![Version](https://img.shields.io/badge/version-v1.0.0-blue.svg)](https://github.com/yourusername/taiwan-stock-data-collector/releases)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-4.9-blue.svg)](https://www.typescriptlang.org/)
+[![NestJS](https://img.shields.io/badge/NestJS-10.0-red.svg)](https://nestjs.com/)
+
 完整的台股資料自動收集與分析系統，整合政府行政機關辦公日曆表，具備智能跳過、資料一致性檢查等先進功能。
+
+> 🎯 **專案狀態**: 生產就緒 | **版本**: v1.0.0 | **效能提升**: 80-90%
 
 ## 📋 目錄
 
@@ -227,12 +234,43 @@ src/
 3. 提交變更：`./git-backup.sh backup "新增功能說明"`
 4. 合併分支：`./git-backup.sh merge feature/new-feature`
 
-## 📞 支援
+## � 部署到 GitHub
+
+### 建立 GitHub 儲存庫
+
+1. **手動建立** (推薦)
+   ```bash
+   # 1. 前往 https://github.com 建立新儲存庫
+   # 2. 儲存庫名稱: taiwan-stock-data-collector
+   # 3. 執行推送腳本
+   ./push-to-github.sh https://github.com/yourusername/taiwan-stock-data-collector.git
+   ```
+
+2. **使用 GitHub CLI** (需安裝 gh CLI)
+   ```bash
+   # 建立公開儲存庫
+   gh repo create taiwan-stock-data-collector --public --push --source=.
+   
+   # 或建立私人儲存庫
+   gh repo create taiwan-stock-data-collector --private --push --source=.
+   ```
+
+### 推送現有專案
+```bash
+# 如果已有 GitHub 儲存庫，直接推送
+git remote add origin https://github.com/yourusername/taiwan-stock-data-collector.git
+git branch -M main
+git push -u origin main
+git push origin --tags
+```
+
+## �📞 支援
 
 如有問題或建議，請透過以下方式聯繫：
-- 建立 Issue 回報問題
-- 提交 Pull Request 貢獻代碼
-- 查看文件獲取詳細說明
+- 🐛 [建立 Issue](../../issues) 回報問題
+- 🔧 [提交 Pull Request](../../pulls) 貢獻代碼  
+- 📚 [查看 Wiki](../../wiki) 獲取詳細說明
+- ⭐ [給專案星星](../../stargazers) 支持開發
 
 ---
 
