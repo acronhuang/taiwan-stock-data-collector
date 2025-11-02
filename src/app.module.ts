@@ -1,13 +1,13 @@
 import { Module, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ScheduleModule } from '@nestjs/schedule';
 import { MongooseModule } from '@nestjs/mongoose';
+import { ScheduleModule } from '@nestjs/schedule';
 import { DateTime } from 'luxon';
-import { ScraperModule } from './scraper/scraper.module';
-import { MarketStatsModule } from './market-stats/market-stats.module';
-import { TickerModule } from './ticker/ticker.module';
 import { CommonModule } from './common/common.module';
+import { MarketStatsModule } from './market-stats/market-stats.module';
 import { MarketStatsService } from './market-stats/market-stats.service';
+import { ScraperModule } from './scraper/scraper.module';
+import { TickerModule } from './ticker/ticker.module';
 import { TickerService } from './ticker/ticker.service';
 
 @Module({
@@ -19,12 +19,12 @@ import { TickerService } from './ticker/ticker.service';
     MarketStatsModule,
     TickerModule,
     CommonModule,
-  ]
+  ],
 })
 export class AppModule implements OnApplicationBootstrap {
   constructor(
     private readonly marketStatsService: MarketStatsService,
-    private readonly tickerService: TickerService
+    private readonly tickerService: TickerService,
   ) {}
 
   async onApplicationBootstrap() {
@@ -35,25 +35,34 @@ export class AppModule implements OnApplicationBootstrap {
       const startDate = DateTime.fromISO('2025-10-01');
       const endDate = DateTime.fromISO('2025-10-31');
 
-      Logger.log(`開始抓取 ${startDate.toISODate()} 到 ${endDate.toISODate()} 的資料`, AppModule.name);
+      Logger.log(
+        `開始抓取 ${startDate.toISODate()} 到 ${endDate.toISODate()} 的資料`,
+        AppModule.name,
+      );
 
       let processedDays = 0;
-      let totalDays = endDate.diff(startDate, 'days').days + 1;
+      const totalDays = endDate.diff(startDate, 'days').days + 1;
 
       for (let dt = startDate; dt <= endDate; dt = dt.plus({ day: 1 })) {
         processedDays++;
-        Logger.log(`正在處理 ${dt.toISODate()} (${processedDays}/${totalDays})`, AppModule.name);
-        
+        Logger.log(
+          `正在處理 ${dt.toISODate()} (${processedDays}/${totalDays})`,
+          AppModule.name,
+        );
+
         try {
           await this.marketStatsService.updateMarketStats(dt.toISODate());
           await this.tickerService.updateTickers(dt.toISODate());
           Logger.log(`${dt.toISODate()} 資料處理完成`, AppModule.name);
         } catch (error) {
-          Logger.error(`${dt.toISODate()} 資料處理失敗: ${error.message}`, AppModule.name);
+          Logger.error(
+            `${dt.toISODate()} 資料處理失敗: ${error.message}`,
+            AppModule.name,
+          );
         }
-        
+
         // 加入延遲避免過於頻繁的請求
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
       Logger.log('應用程式初始化完成', AppModule.name);

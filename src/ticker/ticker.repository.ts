@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { safeGet } from '../common/security.utils';
 import { Ticker, TickerDocument } from './ticker.schema';
 
 @Injectable()
@@ -25,14 +26,20 @@ export class TickerRepository {
   /**
    * 獲取指定日期和代號的現有資料
    */
-  async getTicker(date: string, symbol: string): Promise<TickerDocument | null> {
+  async getTicker(
+    date: string,
+    symbol: string,
+  ): Promise<TickerDocument | null> {
     return this.model.findOne({ date, symbol });
   }
 
   /**
    * 批量檢查特定日期的資料數量
    */
-  async getTickerCount(date: string, filters?: Partial<Ticker>): Promise<number> {
+  async getTickerCount(
+    date: string,
+    filters?: Partial<Ticker>,
+  ): Promise<number> {
     const query = { date, ...filters };
     return this.model.countDocuments(query);
   }
@@ -40,33 +47,52 @@ export class TickerRepository {
   /**
    * 檢查資料是否需要更新
    */
-  async needsUpdate(date: string, symbol: string, newData: Partial<Ticker>): Promise<boolean> {
+  async needsUpdate(
+    date: string,
+    symbol: string,
+    newData: Partial<Ticker>,
+  ): Promise<boolean> {
     const existing = await this.getTicker(date, symbol);
-    if (!existing) return true;
+    if (!existing) {
+      return true;
+    }
 
     // 比較關鍵欄位
-    const keyFields = ['closePrice', 'openPrice', 'highPrice', 'lowPrice', 'volume', 'tradeValue'];
-    
+    const keyFields = [
+      'closePrice',
+      'openPrice',
+      'highPrice',
+      'lowPrice',
+      'volume',
+      'tradeValue',
+    ];
+
     for (const field of keyFields) {
-      if (newData[field] !== undefined && existing[field] !== newData[field]) {
+      const newValue = safeGet(newData, field);
+      const existingValue = safeGet(existing, field);
+      if (newValue !== undefined && existingValue !== newValue) {
         return true;
       }
     }
-    
+
     return false;
   }
 
   /**
    * 智能批量更新
    */
-  async smartBatchUpdate(tickers: Partial<Ticker>[]): Promise<{ updated: number; skipped: number; total: number }> {
+  async smartBatchUpdate(
+    tickers: Partial<Ticker>[],
+  ): Promise<{ updated: number; skipped: number; total: number }> {
     let updated = 0;
     let skipped = 0;
-    
+
     for (const ticker of tickers) {
       const { date, symbol } = ticker;
-      if (!date || !symbol) continue;
-      
+      if (!date || !symbol) {
+        continue;
+      }
+
       const needsUpdate = await this.needsUpdate(date, symbol, ticker);
       if (needsUpdate) {
         await this.updateTicker(ticker);
@@ -75,7 +101,7 @@ export class TickerRepository {
         skipped++;
       }
     }
-    
+
     return { updated, skipped, total: tickers.length };
   }
 }

@@ -59,7 +59,7 @@ export class HolidayService {
    */
   async isHoliday(date: string): Promise<boolean> {
     const dateStr = this.formatDate(date);
-    
+
     // 檢查是否為週末
     if (this.isWeekend(dateStr)) {
       return true;
@@ -82,7 +82,9 @@ export class HolidayService {
       this.holidayCache.set(dateStr, isHolidayFromApi);
       return isHolidayFromApi;
     } catch (error) {
-      this.logger.warn(`無法從 API 獲取 ${dateStr} 的假日資訊: ${error.message}`);
+      this.logger.warn(
+        `無法從 API 獲取 ${dateStr} 的假日資訊: ${error.message}`,
+      );
       // 回退到基本邏輯：週末視為假日
       const isWeekendOnly = this.isWeekend(dateStr);
       this.holidayCache.set(dateStr, isWeekendOnly);
@@ -104,14 +106,18 @@ export class HolidayService {
     const workingDays: string[] = [];
     const start = new Date(startDate);
     const end = new Date(endDate);
-    
-    for (let date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+
+    for (
+      let date = new Date(start);
+      date <= end;
+      date.setDate(date.getDate() + 1)
+    ) {
       const dateStr = this.formatDate(date.toISOString());
       if (await this.isWorkingDay(dateStr)) {
         workingDays.push(dateStr);
       }
     }
-    
+
     return workingDays;
   }
 
@@ -119,13 +125,13 @@ export class HolidayService {
    * 獲取下一個工作日
    */
   async getNextWorkingDay(date: string): Promise<string> {
-    let nextDate = new Date(date);
+    const nextDate = new Date(date);
     nextDate.setDate(nextDate.getDate() + 1);
-    
+
     while (await this.isHoliday(this.formatDate(nextDate.toISOString()))) {
       nextDate.setDate(nextDate.getDate() + 1);
     }
-    
+
     return this.formatDate(nextDate.toISOString());
   }
 
@@ -142,8 +148,10 @@ export class HolidayService {
    * 檢查是否為已知假日
    */
   private isKnownHoliday(dateStr: string): boolean {
-    return this.KNOWN_HOLIDAYS_2024.includes(dateStr) || 
-           this.KNOWN_HOLIDAYS_2025.includes(dateStr);
+    return (
+      this.KNOWN_HOLIDAYS_2024.includes(dateStr) ||
+      this.KNOWN_HOLIDAYS_2025.includes(dateStr)
+    );
   }
 
   /**
@@ -155,8 +163,8 @@ export class HolidayService {
         'https://staging.data.ntpc.gov.tw/api/datasets/308dcd75-6434-45bc-a95f-584da4fed251/json',
         {
           params: { size: 5000 },
-          timeout: 5000
-        }
+          timeout: 5000,
+        },
       );
 
       if (!response.data || !Array.isArray(response.data)) {
@@ -165,8 +173,8 @@ export class HolidayService {
 
       // 轉換日期格式 (API 使用 YYYY/MM/DD，我們使用 YYYY-MM-DD)
       const apiDateStr = dateStr.replace(/-/g, '/');
-      const holidayRecord = response.data.find((item: HolidayData) => 
-        item.date === apiDateStr
+      const holidayRecord = response.data.find(
+        (item: HolidayData) => item.date === apiDateStr,
       );
 
       return holidayRecord ? holidayRecord.isholiday === '是' : false;
@@ -192,9 +200,9 @@ export class HolidayService {
       this.lastCacheUpdate = new Date();
       return false;
     }
-    
+
     const now = new Date();
-    return (now.getTime() - this.lastCacheUpdate.getTime()) < this.CACHE_DURATION;
+    return now.getTime() - this.lastCacheUpdate.getTime() < this.CACHE_DURATION;
   }
 
   /**
@@ -212,7 +220,7 @@ export class HolidayService {
   getCacheStats(): { size: number; lastUpdate: Date | null } {
     return {
       size: this.holidayCache.size,
-      lastUpdate: this.lastCacheUpdate
+      lastUpdate: this.lastCacheUpdate,
     };
   }
 }

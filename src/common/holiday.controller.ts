@@ -14,17 +14,17 @@ export class HolidayController {
     try {
       const isHoliday = await this.holidayService.isHoliday(date);
       const isWorkingDay = await this.holidayService.isWorkingDay(date);
-      
+
       return {
         date,
         isHoliday,
         isWorkingDay,
-        message: isHoliday ? '此日期為休假日' : '此日期為工作日'
+        message: isHoliday ? '此日期為休假日' : '此日期為工作日',
       };
     } catch (error) {
       return {
         error: '檢查失敗',
-        message: error.message
+        message: error.message,
       };
     }
   }
@@ -32,25 +32,28 @@ export class HolidayController {
   @Get('working-days')
   async getWorkingDays(
     @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string
+    @Query('endDate') endDate: string,
   ) {
     if (!startDate || !endDate) {
       return { error: '請提供 startDate 和 endDate 參數 (格式: YYYY-MM-DD)' };
     }
 
     try {
-      const workingDays = await this.holidayService.getWorkingDays(startDate, endDate);
-      
+      const workingDays = await this.holidayService.getWorkingDays(
+        startDate,
+        endDate,
+      );
+
       return {
         startDate,
         endDate,
         workingDays,
-        count: workingDays.length
+        count: workingDays.length,
       };
     } catch (error) {
       return {
         error: '查詢失敗',
-        message: error.message
+        message: error.message,
       };
     }
   }
@@ -63,16 +66,16 @@ export class HolidayController {
 
     try {
       const nextWorkingDay = await this.holidayService.getNextWorkingDay(date);
-      
+
       return {
         date,
         nextWorkingDay,
-        message: `${date} 的下一個工作日是 ${nextWorkingDay}`
+        message: `${date} 的下一個工作日是 ${nextWorkingDay}`,
       };
     } catch (error) {
       return {
         error: '查詢失敗',
-        message: error.message
+        message: error.message,
       };
     }
   }

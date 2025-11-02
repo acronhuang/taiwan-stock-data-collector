@@ -66,5 +66,6 @@ export class MarketStats {
   usdtwd: number;
 }
 
-export const MarketStatsSchema = SchemaFactory.createForClass(MarketStats)
-  .index({ date: -1 }, { unique: true });
+export const MarketStatsSchema = SchemaFactory.createForClass(
+  MarketStats,
+).index({ date: -1 }, { unique: true });

@@ -63,5 +63,7 @@ export class Ticker {
   dealersNetBuySell: number;
 }
 
-export const TickerSchema = SchemaFactory.createForClass(Ticker)
-  .index({ date: -1, symbol: 1 }, { unique: true });
+export const TickerSchema = SchemaFactory.createForClass(Ticker).index(
+  { date: -1, symbol: 1 },
+  { unique: true },
+);

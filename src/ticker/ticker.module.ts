@@ -1,18 +1,16 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { Ticker, TickerSchema } from './ticker.schema';
-import { TickerRepository } from './ticker.repository';
-import { ScraperModule } from '../scraper/scraper.module';
 import { CommonModule } from '../common/common.module';
+import { ScraperModule } from '../scraper/scraper.module';
+import { TickerRepository } from './ticker.repository';
+import { Ticker, TickerSchema } from './ticker.schema';
 import { TickerService } from './ticker.service';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: Ticker.name, schema: TickerSchema },
-    ]),
+    MongooseModule.forFeature([{ name: Ticker.name, schema: TickerSchema }]),
     ScraperModule,
-    CommonModule,
+    forwardRef(() => CommonModule),
   ],
   providers: [TickerRepository, TickerService],
   exports: [TickerRepository, TickerService],

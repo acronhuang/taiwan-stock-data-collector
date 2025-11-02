@@ -2,11 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { MarketStats, MarketStatsDocument } from './market-stats.schema';
+import { safeGet } from '../common/security.utils';
 
 @Injectable()
 export class MarketStatsRepository {
   constructor(
-    @InjectModel(MarketStats.name) private readonly model: Model<MarketStatsDocument>,
+    @InjectModel(MarketStats.name)
+    private readonly model: Model<MarketStatsDocument>,
   ) {}
 
   async updateMarketStats(marketStats: Partial<MarketStats>) {
@@ -32,28 +34,43 @@ export class MarketStatsRepository {
   /**
    * 檢查資料是否需要更新 (比較關鍵欄位)
    */
-  async needsUpdate(date: string, newData: Partial<MarketStats>): Promise<boolean> {
+  async needsUpdate(
+    date: string,
+    newData: Partial<MarketStats>,
+  ): Promise<boolean> {
     const existing = await this.getMarketStats(date);
-    if (!existing) return true;
+    if (!existing) {
+      return true;
+    }
 
     // 比較關鍵欄位，如果有差異則需要更新
-    const keyFields = ['taiexPrice', 'taiexChange', 'finiNetBuySell', 'sitcNetBuySell', 'dealersNetBuySell'];
-    
+    const keyFields = [
+      'taiexPrice',
+      'taiexChange',
+      'finiNetBuySell',
+      'sitcNetBuySell',
+      'dealersNetBuySell',
+    ];
+
     for (const field of keyFields) {
-      if (newData[field] !== undefined && existing[field] !== newData[field]) {
+      const newValue = safeGet(newData, field);
+      const existingValue = safeGet(existing, field);
+      if (newValue !== undefined && existingValue !== newValue) {
         return true;
       }
     }
-    
+
     return false;
   }
 
   /**
    * 智能更新：只有在資料不存在或有變化時才更新
    */
-  async smartUpdate(marketStats: Partial<MarketStats>): Promise<{ updated: boolean; reason: string }> {
+  async smartUpdate(
+    marketStats: Partial<MarketStats>,
+  ): Promise<{ updated: boolean; reason: string }> {
     const { date } = marketStats;
-    
+
     const existing = await this.getMarketStats(date);
     if (!existing) {
       await this.updateMarketStats(marketStats);

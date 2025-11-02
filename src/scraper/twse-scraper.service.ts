@@ -1,11 +1,12 @@
-import * as _ from 'lodash';
+import { HttpService } from '@nestjs/axios';
+import { Injectable } from '@nestjs/common';
 import * as cheerio from 'cheerio';
 import * as iconv from 'iconv-lite';
-import * as numeral from 'numeral';
-import { Injectable } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom } from 'rxjs';
+import * as _ from 'lodash';
 import { DateTime } from 'luxon';
+import * as numeral from 'numeral';
+import { firstValueFrom } from 'rxjs';
+import { safeGet } from '../common/security.utils';
 
 @Injectable()
 export class TwseScraperService {
@@ -14,24 +15,32 @@ export class TwseScraperService {
   async fetchListedStocks(options?: { market: 'TSE' | 'OTC' }) {
     const market = options?.market ?? 'TSE';
     const url = {
-      'TSE': 'https://isin.twse.com.tw/isin/class_main.jsp?market=1&issuetype=1',
-      'OTC': 'https://isin.twse.com.tw/isin/class_main.jsp?market=2&issuetype=4',
+      TSE: 'https://isin.twse.com.tw/isin/class_main.jsp?market=1&issuetype=1',
+      OTC: 'https://isin.twse.com.tw/isin/class_main.jsp?market=2&issuetype=4',
     };
+    const targetUrl = safeGet(
+      url,
+      market,
+      'https://isin.twse.com.tw/isin/class_main.jsp?market=1&issuetype=1',
+    );
     const response = await firstValueFrom(
-      this.httpService.get(url[market], { responseType: 'arraybuffer' })
+      this.httpService.get(targetUrl, { responseType: 'arraybuffer' }),
     );
     const page = iconv.decode(response.data, 'big5');
     const $ = cheerio.load(page);
 
-    return $('.h4 tr').slice(1).map((_, el) => {
-      const td = $(el).find('td');
-      return {
-        symbol: td.eq(2).text().trim(),
-        name: td.eq(3).text().trim(),
-        market: td.eq(4).text().trim(),
-        industry: td.eq(6).text().trim(),
-      };
-    }).toArray();
+    return $('.h4 tr')
+      .slice(1)
+      .map((_, el) => {
+        const td = $(el).find('td');
+        return {
+          symbol: td.eq(2).text().trim(),
+          name: td.eq(3).text().trim(),
+          market: td.eq(4).text().trim(),
+          industry: td.eq(6).text().trim(),
+        };
+      })
+      .toArray();
   }
 
   async fetchMarketTrades(options?: { date: string }) {
@@ -43,20 +52,27 @@ export class TwseScraperService {
     const url = `https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?${query}`;
 
     const response = await firstValueFrom(this.httpService.get(url));
-    const json = (response.data.stat === 'OK') && response.data;
-    if (!json) return null;
+    const json = response.data.stat === 'OK' && response.data;
+    if (!json) {
+      return null;
+    }
 
-    return json.data.map(row => {
-      const [year, month, day] = row[0].split('/');
-      return {
-        date: `${+year + 1911}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`,
-        tradeVolume: numeral(row[1]).value(),
-        tradeValue: numeral(row[2]).value(),
-        transaction: numeral(row[3]).value(),
-        price: numeral(row[4]).value(),
-        change: numeral(row[5]).value(),
-      };
-    }).find(data => data.date === date);
+    return json.data
+      .map((row) => {
+        const [year, month, day] = row[0].split('/');
+        return {
+          date: `${+year + 1911}-${month.padStart(2, '0')}-${day.padStart(
+            2,
+            '0',
+          )}`,
+          tradeVolume: numeral(row[1]).value(),
+          tradeValue: numeral(row[2]).value(),
+          transaction: numeral(row[3]).value(),
+          price: numeral(row[4]).value(),
+          change: numeral(row[5]).value(),
+        };
+      })
+      .find((data) => data.date === date);
   }
 
   async fetchMarketBreadth(options?: { date: string }) {
@@ -68,10 +84,12 @@ export class TwseScraperService {
     const url = `https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?${query}`;
 
     const response = await firstValueFrom(this.httpService.get(url));
-    const json = (response.data.stat === 'OK') && response.data;
-    if (!json) return null;
+    const json = response.data.stat === 'OK' && response.data;
+    if (!json) {
+      return null;
+    }
 
-    const raw = json.tables[7].data.map(row => row[2]);
+    const raw = json.tables[7].data.map((row) => row[2]);
     const [up, limitUp] = raw[0].replace(')', '').split('(');
     const [down, limitDown] = raw[1].replace(')', '').split('(');
     const [unchanged, unmatched, notApplicable] = raw.slice(2);
@@ -97,12 +115,15 @@ export class TwseScraperService {
     const url = `https://www.twse.com.tw/rwd/zh/fund/BFI82U?${query}`;
 
     const response = await firstValueFrom(this.httpService.get(url));
-    const json = (response.data.stat === 'OK') && response.data;
-    if (!json) return null;
+    const json = response.data.stat === 'OK' && response.data;
+    if (!json) {
+      return null;
+    }
 
     const data = json.data
-      .map(row => row.slice(1)).flat()
-      .map(row => numeral(row).value());
+      .map((row) => row.slice(1))
+      .flat()
+      .map((row) => numeral(row).value());
 
     return {
       date,
@@ -122,12 +143,15 @@ export class TwseScraperService {
     const url = `https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?${query}`;
 
     const response = await firstValueFrom(this.httpService.get(url));
-    const json = (response.data.stat === 'OK') && response.data;
-    if (!json) return null;
+    const json = response.data.stat === 'OK' && response.data;
+    if (!json) {
+      return null;
+    }
 
     const data = json.tables[0].data
-      .map(data => data.slice(1)).flat()
-      .map(data => numeral(data).value());
+      .map((data) => data.slice(1))
+      .flat()
+      .map((data) => numeral(data).value());
 
     return {
       date,
@@ -140,22 +164,14 @@ export class TwseScraperService {
     };
   }
 
-  async fetchIndicesQuotes(options?: { date: string }) {
-    const date = options?.date ?? DateTime.local().toISODate();
-    const query = new URLSearchParams({
-      date: DateTime.fromISO(date).toFormat('yyyyMMdd'),
-      response: 'json',
-    });
-    const url = `https://www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_INDEX?${query}`;
-
-    const response = await firstValueFrom(this.httpService.get(url));
-    const json = (response.data.stat === 'OK') && response.data;
-    if (!json) return null;
-
-    const indices = [
+  /**
+   * 取得指數定義清單
+   */
+  private getIndicesDefinitions() {
+    return [
       { symbol: 'IX0001', name: '發行量加權股價指數' },
       { symbol: 'IX0007', name: '未含金融保險股指數' },
-      { symbol: 'IX0008', name: '未含電子股指數'  },
+      { symbol: 'IX0008', name: '未含電子股指數' },
       { symbol: 'IX0009', name: '未含金融電子股指數' },
       { symbol: 'IX0010', name: '水泥類指數' },
       { symbol: 'IX0011', name: '食品類指數' },
@@ -192,31 +208,84 @@ export class TwseScraperService {
       { symbol: 'IX0188', name: '居家生活類指數' },
       { symbol: 'IX0042', name: '其他類指數' },
     ];
+  }
 
-    const quotes = json.data.flatMap(row => {
+  /**
+   * 處理指數報價資料並計算 OHLC
+   */
+  private processIndicesQuotes(
+    quotes: Array<{
+      date: string;
+      time: string;
+      symbol: string;
+      name: string;
+      price: number;
+    }>,
+  ) {
+    return _(quotes)
+      .groupBy('symbol')
+      .map((quotes) => {
+        const [prev, ...rows] = quotes;
+        const { date, symbol, name } = prev;
+        const data: {
+          date: string;
+          symbol: string;
+          name: string;
+          openPrice: number;
+          highPrice: number;
+          lowPrice: number;
+          closePrice: number;
+          change: number;
+          changePercent: number;
+        } = {
+          date,
+          symbol,
+          name,
+          openPrice: _.minBy(rows, 'time')?.price || 0,
+          highPrice: _.maxBy(rows, 'price')?.price || 0,
+          lowPrice: _.minBy(rows, 'price')?.price || 0,
+          closePrice: _.maxBy(rows, 'time')?.price || 0,
+          change: 0,
+          changePercent: 0,
+        };
+        data.change = numeral(data.closePrice).subtract(prev.price).value();
+        data.changePercent = +numeral(data.change)
+          .divide(prev.price)
+          .multiply(100)
+          .format('0.00');
+        return data;
+      })
+      .value();
+  }
+
+  async fetchIndicesQuotes(options?: { date: string }) {
+    const date = options?.date ?? DateTime.local().toISODate();
+    const query = new URLSearchParams({
+      date: DateTime.fromISO(date).toFormat('yyyyMMdd'),
+      response: 'json',
+    });
+    const url = `https://www.twse.com.tw/rwd/zh/TAIEX/MI_5MINS_INDEX?${query}`;
+
+    const response = await firstValueFrom(this.httpService.get(url));
+    const json = response.data.stat === 'OK' && response.data;
+    if (!json) {
+      return null;
+    }
+
+    const indices = this.getIndicesDefinitions();
+
+    const quotes = json.data.flatMap((row) => {
       const [time, ...values] = row;
       return values.map((value, i) => ({
         date,
         time,
-        symbol: indices[i].symbol,
-        name: indices[i].name,
+        symbol: indices[i]?.symbol || '',
+        name: indices[i]?.name || '',
         price: numeral(value).value(),
       }));
     });
 
-    return _(quotes).groupBy('symbol')
-      .map(quotes => {
-        const [prev, ...rows] = quotes;
-        const { date, symbol, name } = prev;
-        const data: Record<string, any> = { date, symbol, name};
-        data.openPrice = _.minBy(rows, 'time').price;
-        data.highPrice = _.maxBy(rows, 'price').price;
-        data.lowPrice = _.minBy(rows, 'price').price;
-        data.closePrice = _.maxBy(rows, 'time').price;
-        data.change = numeral(data.closePrice).subtract(prev.price).value();
-        data.changePercent = +numeral(data.change).divide(prev.price).multiply(100).format('0.00');
-        return data;
-      }).value();
+    return this.processIndicesQuotes(quotes);
   }
 
   async fetchIndicesTrades(options?: { date: string }) {
@@ -227,11 +296,15 @@ export class TwseScraperService {
     });
     const url = `https://www.twse.com.tw/rwd/zh/afterTrading/BFIAMU?${query}`;
     const response = await firstValueFrom(this.httpService.get(url));
-    const json = (response.data.stat === 'OK') && response.data;
-    if (!json) return null;
+    const json = response.data.stat === 'OK' && response.data;
+    if (!json) {
+      return null;
+    }
 
     const market = await this.fetchMarketTrades({ date });
-    if (!market) return null;
+    if (!market) {
+      return null;
+    }
 
     const indices = [
       { symbol: 'IX0010', name: '水泥類指數' },
@@ -272,10 +345,25 @@ export class TwseScraperService {
 
     return json.data.map((row, i) => {
       const { symbol, name } = indices[i];
-      const data: Record<string, any> = { date, symbol, name };
-      data.tradeVolume = numeral(row[1]).value();
-      data.tradeValue = numeral(row[2]).value();
-      data.tradeWeight = +numeral(data.tradeValue).divide(market.tradeValue).multiply(100).format('0.00');
+      const tradeValue = numeral(row[2]).value();
+      const data: {
+        date: string;
+        symbol: string;
+        name: string;
+        tradeVolume: number;
+        tradeValue: number;
+        tradeWeight: number;
+      } = {
+        date,
+        symbol,
+        name,
+        tradeVolume: numeral(row[1]).value(),
+        tradeValue,
+        tradeWeight: +numeral(tradeValue)
+          .divide(market.tradeValue)
+          .multiply(100)
+          .format('0.00'),
+      };
       return data;
     });
   }
@@ -290,25 +378,50 @@ export class TwseScraperService {
     const url = `https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?${query}`;
 
     const response = await firstValueFrom(this.httpService.get(url));
-    const json = (response.data.stat === 'OK') && response.data;
-    if (!json) return null;
+    const json = response.data.stat === 'OK' && response.data;
+    if (!json) {
+      return null;
+    }
 
-    return json.tables[8].data.map(row => {
+    return json.tables[8].data.map((row) => {
       const [symbol, name, ...values] = row;
-      const data: Record<string, any> = { date, symbol, name };
-      data.openPrice = numeral(values[3]).value();
-      data.highPrice = numeral(values[4]).value();
-      data.lowPrice = numeral(values[5]).value();
-      data.closePrice = numeral(values[6]).value();
-      data.tradeVolume = numeral(values[0]).value();
-      data.tradeValue = numeral(values[2]).value();
-      data.transaction = numeral(values[1]).value();
-      data.change = values[7].includes('green')
+      const closePrice = numeral(values[6]).value();
+      const change = values[7].includes('green')
         ? numeral(values[8]).multiply(-1).value()
         : numeral(values[8]).value();
-      data.changePercent = data.closePrice
-        ? +numeral(data.change).divide(data.closePrice - data.change).multiply(100).format('0.00')
-        : 0;
+
+      const data: {
+        date: string;
+        symbol: string;
+        name: string;
+        openPrice: number;
+        highPrice: number;
+        lowPrice: number;
+        closePrice: number;
+        tradeVolume: number;
+        tradeValue: number;
+        transaction: number;
+        change: number;
+        changePercent: number;
+      } = {
+        date,
+        symbol,
+        name,
+        openPrice: numeral(values[3]).value(),
+        highPrice: numeral(values[4]).value(),
+        lowPrice: numeral(values[5]).value(),
+        closePrice,
+        tradeVolume: numeral(values[0]).value(),
+        tradeValue: numeral(values[2]).value(),
+        transaction: numeral(values[1]).value(),
+        change,
+        changePercent: closePrice
+          ? +numeral(change)
+              .divide(closePrice - change)
+              .multiply(100)
+              .format('0.00')
+          : 0,
+      };
       return data;
     });
   }
@@ -323,15 +436,28 @@ export class TwseScraperService {
     const url = `https://www.twse.com.tw/rwd/zh/fund/T86?${query}`;
 
     const response = await firstValueFrom(this.httpService.get(url));
-    const json = (response.data.stat === 'OK') && response.data;
-    if (!json) return null;
+    const json = response.data.stat === 'OK' && response.data;
+    if (!json) {
+      return null;
+    }
 
-    return json.data.map(row => {
+    return json.data.map((row) => {
       const [symbol, name, ...values] = row;
-      const data: Record<string, any> = { date, symbol, name };
-      data.finiNetBuySell = numeral(values[4]).value() + numeral(values[7]).value(); // 外陸資買賣超 + 外資自營商買賣超
-      data.sitcNetBuySell = numeral(values[10]).value(); // 投信買賣超
-      data.dealersNetBuySell = numeral(values[11]).value(); // 自營商買賣超
+      const data: {
+        date: string;
+        symbol: string;
+        name: string;
+        finiNetBuySell: number;
+        sitcNetBuySell: number;
+        dealersNetBuySell: number;
+      } = {
+        date,
+        symbol,
+        name,
+        finiNetBuySell: numeral(values[4]).value() + numeral(values[7]).value(), // 外陸資買賣超 + 外資自營商買賣超
+        sitcNetBuySell: numeral(values[10]).value(), // 投信買賣超
+        dealersNetBuySell: numeral(values[11]).value(), // 自營商買賣超
+      };
       return data;
     });
   }
@@ -346,16 +472,30 @@ export class TwseScraperService {
     const url = `https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?${query}`;
 
     const response = await firstValueFrom(this.httpService.get(url));
-    const json = (response.data.stat === 'OK') && response.data;
-    if (!json) return null;
+    const json = response.data.stat === 'OK' && response.data;
+    if (!json) {
+      return null;
+    }
 
-    return json.data.map(row => {
+    return json.data.map((row) => {
       const [symbol, name, ...values] = row;
-      const data: Record<string, any> = { date, symbol, name };
-      data.peRatio = numeral(values[2]).value();
-      data.pbRatio = numeral(values[3]).value();
-      data.dividendYield = numeral(values[0]).value();
-      data.dividendYear = numeral(values[1]).value();
+      const data: {
+        date: string;
+        symbol: string;
+        name: string;
+        peRatio: number;
+        pbRatio: number;
+        dividendYield: number;
+        dividendYear: number;
+      } = {
+        date,
+        symbol,
+        name,
+        peRatio: numeral(values[2]).value(),
+        pbRatio: numeral(values[3]).value(),
+        dividendYield: numeral(values[0]).value(),
+        dividendYear: numeral(values[1]).value(),
+      };
       return data;
     });
   }
