@@ -4,12 +4,20 @@ import { ApiStatusService } from './api-status.service';
 import { HolidayController } from './holiday.controller';
 import { HolidayService } from './holiday.service';
 import { AdminController } from './admin.controller';
+import { AnalysisWebController } from './analysis-web.controller';
 import { MarketStatsModule } from '../market-stats/market-stats.module';
 import { TickerModule } from '../ticker/ticker.module';
+import { TechnicalAnalysisModule } from '../technical-analysis/technical-analysis.module';
+import { ChartModule } from '../chart/chart.module';
 
 @Module({
-  imports: [forwardRef(() => MarketStatsModule), forwardRef(() => TickerModule)],
-  controllers: [HolidayController, ApiStatusController, AdminController],
+  imports: [
+    forwardRef(() => MarketStatsModule), 
+    forwardRef(() => TickerModule),
+    forwardRef(() => TechnicalAnalysisModule),
+    forwardRef(() => ChartModule),
+  ],
+  controllers: [HolidayController, ApiStatusController, AdminController, AnalysisWebController],
   providers: [HolidayService, ApiStatusService],
   exports: [HolidayService, ApiStatusService],
 })

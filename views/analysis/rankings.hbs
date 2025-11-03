@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票排行榜 - 技術分析系統</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .ranking-card:hover {
+            transform: translateY(-1px);
+            transition: transform 0.2s ease-in-out;
+        }
+        .rank-medal {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+        .rank-1 { background: linear-gradient(45deg, #ffd700, #ffed4e); color: #8b5a00; }
+        .rank-2 { background: linear-gradient(45deg, #c0c0c0, #e5e5e5); color: #666; }
+        .rank-3 { background: linear-gradient(45deg, #cd7f32, #deb887); color: #5d4e37; }
+        .rank-other { background: linear-gradient(45deg, #6b7280, #9ca3af); }
+        .tab-active {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- 導航欄 -->
+    <nav class="bg-blue-600 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold">🏆 股票排行榜</h1>
+                <p class="text-blue-200">各項技術指標與市場表現排名</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <a href="/analysis" class="hover:bg-blue-700 px-3 py-2 rounded">總覽</a>
+                <a href="/analysis/dashboard" class="hover:bg-blue-700 px-3 py-2 rounded">儀表板</a>
+                <a href="/analysis/signals" class="hover:bg-blue-700 px-3 py-2 rounded">信號</a>
+                <div class="flex items-center space-x-2">
+                    <label class="text-sm">市場:</label>
+                    <select id="marketFilter" onchange="filterByMarket()" class="bg-blue-700 border border-blue-500 rounded px-2 py-1 text-sm">
+                        <option value="all">全部</option>
+                        <option value="twse">上市</option>
+                        <option value="tpex">上櫃</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto mt-6 p-4">
+        <!-- 排行榜類型選擇 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div class="flex flex-wrap gap-2">
+                <button onclick="switchTab('technical')" class="tab-btn px-4 py-2 rounded-md border transition-colors tab-active">
+                    技術評分排行
+                </button>
+                <button onclick="switchTab('performance')" class="tab-btn px-4 py-2 rounded-md border transition-colors">
+                    績效表現排行
+                </button>
+                <button onclick="switchTab('volume')" class="tab-btn px-4 py-2 rounded-md border transition-colors">
+                    成交量排行
+                </button>
+                <button onclick="switchTab('volatility')" class="tab-btn px-4 py-2 rounded-md border transition-colors">
+                    波動率排行
+                </button>
+                <button onclick="switchTab('momentum')" class="tab-btn px-4 py-2 rounded-md border transition-colors">
+                    動能指標排行
+                </button>
+            </div>
+        </div>
+
+        <!-- 技術評分排行 -->
+        <div id="technicalTab" class="ranking-section">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- 最佳技術評分 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">🥇 技術評分前20名</h3>
+                    <div class="space-y-3">
+                        {{#each technicalRanking}}
+                        <div class="ranking-card flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                            <div class="flex items-center space-x-3">
+                                <div class="rank-medal rank-{{getRankClass @index}}">
+                                    {{add @index 1}}
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{this.symbol}}</p>
+                                    <p class="text-sm text-gray-600">{{this.name}}</p>
+                                    <p class="text-xs text-gray-500">{{this.market}} • {{this.sector}}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-2xl font-bold text-blue-600">{{this.technicalScore}}</p>
+                                <p class="text-sm {{getRecommendationClass this.recommendation}}">
+                                    {{getRecommendationText this.recommendation}}
+                                </p>
+                                <p class="text-sm text-gray-600">${{this.closePrice}}</p>
+                            </div>
+                        </div>
+                        {{/each}}
+                    </div>
+                </div>
+
+                <!-- 技術評分分布圖 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">📊 技術評分分布</h3>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="technicalScoreChart"></canvas>
+                    </div>
+                    <div class="mt-4 grid grid-cols-5 gap-2 text-center">
+                        <div>
+                            <p class="text-xs text-gray-600">0-20</p>
+                            <p class="font-bold text-red-600">{{scoreDistribution.range0_20}}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600">21-40</p>
+                            <p class="font-bold text-orange-600">{{scoreDistribution.range21_40}}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600">41-60</p>
+                            <p class="font-bold text-yellow-600">{{scoreDistribution.range41_60}}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600">61-80</p>
+                            <p class="font-bold text-blue-600">{{scoreDistribution.range61_80}}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600">81-100</p>
+                            <p class="font-bold text-green-600">{{scoreDistribution.range81_100}}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 績效表現排行 -->
+        <div id="performanceTab" class="ranking-section" style="display: none;">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- 日漲幅排行 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">📈 日漲幅前10名</h3>
+                    <div class="space-y-3">
+                        {{#each dayGainers}}
+                        <div class="ranking-card flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <div class="rank-medal rank-{{getRankClass @index}}">{{add @index 1}}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{this.symbol}}</p>
+                                    <p class="text-sm text-gray-600">{{this.name}}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-green-600">+{{this.changePercent}}%</p>
+                                <p class="text-sm text-gray-600">${{this.closePrice}}</p>
+                            </div>
+                        </div>
+                        {{/each}}
+                    </div>
+                </div>
+
+                <!-- 日跌幅排行 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">📉 日跌幅前10名</h3>
+                    <div class="space-y-3">
+                        {{#each dayLosers}}
+                        <div class="ranking-card flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <div class="rank-medal rank-{{getRankClass @index}}">{{add @index 1}}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{this.symbol}}</p>
+                                    <p class="text-sm text-gray-600">{{this.name}}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-red-600">{{this.changePercent}}%</p>
+                                <p class="text-sm text-gray-600">${{this.closePrice}}</p>
+                            </div>
+                        </div>
+                        {{/each}}
+                    </div>
+                </div>
+
+                <!-- 績效圖表 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">📊 市場績效分布</h3>
+                    <div class="chart-container" style="height: 250px;">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                    <div class="mt-4 text-center">
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <p class="text-sm text-green-600">上漲</p>
+                                <p class="font-bold text-green-600">{{performanceStats.gainers}}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-600">平盤</p>
+                                <p class="font-bold text-gray-600">{{performanceStats.unchanged}}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-red-600">下跌</p>
+                                <p class="font-bold text-red-600">{{performanceStats.losers}}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 成交量排行 -->
+        <div id="volumeTab" class="ranking-section" style="display: none;">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- 成交量排行 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">💰 成交量前20名</h3>
+                    <div class="space-y-3">
+                        {{#each volumeRanking}}
+                        <div class="ranking-card flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <div class="rank-medal rank-{{getRankClass @index}}">{{add @index 1}}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{this.symbol}}</p>
+                                    <p class="text-sm text-gray-600">{{this.name}}</p>
+                                    <p class="text-xs text-gray-500">{{this.market}}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-purple-600">{{formatVolume this.volume}}</p>
+                                <p class="text-sm text-gray-600">{{formatAmount this.tradeValue}} 千元</p>
+                                <p class="text-sm {{#if (gt this.changePercent 0)}}text-green-600{{else}}text-red-600{{/if}}">
+                                    {{#if (gt this.changePercent 0)}}+{{/if}}{{this.changePercent}}%
+                                </p>
+                            </div>
+                        </div>
+                        {{/each}}
+                    </div>
+                </div>
+
+                <!-- 成交量分析圖 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">📊 成交量分析</h3>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="volumeAnalysisChart"></canvas>
+                    </div>
+                    <div class="mt-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="text-center">
+                                <p class="text-sm text-gray-600">總成交量</p>
+                                <p class="font-bold text-blue-600">{{formatVolume volumeStats.total}}</p>
+                            </div>
+                            <div class="text-center">
+                                <p class="text-sm text-gray-600">平均成交量</p>
+                                <p class="font-bold text-green-600">{{formatVolume volumeStats.average}}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 波動率排行 -->
+        <div id="volatilityTab" class="ranking-section" style="display: none;">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- 高波動率排行 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">📊 高波動率前20名</h3>
+                    <div class="space-y-3">
+                        {{#each highVolatility}}
+                        <div class="ranking-card flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <div class="rank-medal rank-{{getRankClass @index}}">{{add @index 1}}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{this.symbol}}</p>
+                                    <p class="text-sm text-gray-600">{{this.name}}</p>
+                                    <p class="text-xs text-gray-500">{{this.sector}}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-orange-600">{{this.volatility}}%</p>
+                                <p class="text-sm text-gray-600">最高: ${{this.highPrice}}</p>
+                                <p class="text-sm text-gray-600">最低: ${{this.lowPrice}}</p>
+                            </div>
+                        </div>
+                        {{/each}}
+                    </div>
+                </div>
+
+                <!-- 波動率分布 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">📈 波動率分布圖</h3>
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="volatilityChart"></canvas>
+                    </div>
+                    <div class="mt-4 grid grid-cols-4 gap-2 text-center">
+                        <div>
+                            <p class="text-xs text-gray-600">低波動</p>
+                            <p class="text-xs text-gray-600">&lt;2%</p>
+                            <p class="font-bold text-blue-600">{{volatilityStats.low}}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600">中波動</p>
+                            <p class="text-xs text-gray-600">2-5%</p>
+                            <p class="font-bold text-green-600">{{volatilityStats.medium}}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600">高波動</p>
+                            <p class="text-xs text-gray-600">5-10%</p>
+                            <p class="font-bold text-orange-600">{{volatilityStats.high}}</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-600">極高波動</p>
+                            <p class="text-xs text-gray-600">&gt;10%</p>
+                            <p class="font-bold text-red-600">{{volatilityStats.extreme}}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 動能指標排行 -->
+        <div id="momentumTab" class="ranking-section" style="display: none;">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- RSI排行 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">📊 RSI強勢股</h3>
+                    <div class="space-y-3">
+                        {{#each rsiRanking}}
+                        <div class="ranking-card flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <div class="rank-medal rank-{{getRankClass @index}}">{{add @index 1}}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{this.symbol}}</p>
+                                    <p class="text-sm text-gray-600">{{this.name}}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-purple-600">{{this.rsi}}</p>
+                                <p class="text-xs {{getRSIClass this.rsi}}">{{getRSIText this.rsi}}</p>
+                            </div>
+                        </div>
+                        {{/each}}
+                    </div>
+                </div>
+
+                <!-- MACD排行 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">📈 MACD黃金交叉</h3>
+                    <div class="space-y-3">
+                        {{#each macdRanking}}
+                        <div class="ranking-card flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <div class="rank-medal rank-{{getRankClass @index}}">{{add @index 1}}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{this.symbol}}</p>
+                                    <p class="text-sm text-gray-600">{{this.name}}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-blue-600">{{this.macd}}</p>
+                                <p class="text-xs text-gray-600">信號線: {{this.macdSignal}}</p>
+                            </div>
+                        </div>
+                        {{/each}}
+                    </div>
+                </div>
+
+                <!-- KD排行 -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">⚡ KD黃金交叉</h3>
+                    <div class="space-y-3">
+                        {{#each kdRanking}}
+                        <div class="ranking-card flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <div class="rank-medal rank-{{getRankClass @index}}">{{add @index 1}}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{this.symbol}}</p>
+                                    <p class="text-sm text-gray-600">{{this.name}}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-yellow-600">K: {{this.kValue}}</p>
+                                <p class="text-xs text-gray-600">D: {{this.dValue}}</p>
+                            </div>
+                        </div>
+                        {{/each}}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 切換標籤頁
+        function switchTab(tabName) {
+            // 隱藏所有排行榜區域
+            document.querySelectorAll('.ranking-section').forEach(section => {
+                section.style.display = 'none';
+            });
+            
+            // 移除所有標籤按鈕的活動狀態
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('tab-active');
+            });
+            
+            // 顯示選中的排行榜區域
+            document.getElementById(tabName + 'Tab').style.display = 'block';
+            
+            // 標記點擊的按鈕為活動狀態
+            event.target.classList.add('tab-active');
+        }
+
+        // 市場篩選
+        function filterByMarket() {
+            const market = document.getElementById('marketFilter').value;
+            // 根據市場篩選數據的邏輯
+            if (market !== 'all') {
+                window.location.href = `?market=${market}`;
+            } else {
+                window.location.href = window.location.pathname;
+            }
+        }
+
+        // 輔助函數
+        function getRankClass(index) {
+            if (index === 0) return '1';
+            if (index === 1) return '2';
+            if (index === 2) return '3';
+            return 'other';
+        }
+
+        function getRecommendationClass(recommendation) {
+            switch(recommendation) {
+                case 'strong_buy': return 'text-green-600';
+                case 'buy': return 'text-blue-600';
+                case 'hold': return 'text-yellow-600';
+                case 'sell': return 'text-orange-600';
+                case 'strong_sell': return 'text-red-600';
+                default: return 'text-gray-600';
+            }
+        }
+
+        function getRecommendationText(recommendation) {
+            switch(recommendation) {
+                case 'strong_buy': return '強烈買進';
+                case 'buy': return '買進';
+                case 'hold': return '持有';
+                case 'sell': return '賣出';
+                case 'strong_sell': return '強烈賣出';
+                default: return '-';
+            }
+        }
+
+        function getRSIClass(rsi) {
+            if (rsi >= 70) return 'text-red-600';
+            if (rsi <= 30) return 'text-green-600';
+            return 'text-blue-600';
+        }
+
+        function getRSIText(rsi) {
+            if (rsi >= 70) return '超買';
+            if (rsi <= 30) return '超賣';
+            return '正常';
+        }
+
+        function formatVolume(volume) {
+            if (volume >= 1000000) {
+                return (volume / 1000000).toFixed(2) + 'M';
+            } else if (volume >= 1000) {
+                return (volume / 1000).toFixed(2) + 'K';
+            }
+            return volume;
+        }
+
+        function formatAmount(amount) {
+            return (amount / 1000).toFixed(0);
+        }
+
+        function add(a, b) {
+            return a + b;
+        }
+
+        // 初始化圖表
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+        });
+
+        function initializeCharts() {
+            // 技術評分分布圖
+            const techScoreCtx = document.getElementById('technicalScoreChart').getContext('2d');
+            new Chart(techScoreCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['0-20', '21-40', '41-60', '61-80', '81-100'],
+                    datasets: [{
+                        label: '股票數量',
+                        data: [
+                            {{scoreDistribution.range0_20}},
+                            {{scoreDistribution.range21_40}},
+                            {{scoreDistribution.range41_60}},
+                            {{scoreDistribution.range61_80}},
+                            {{scoreDistribution.range81_100}}
+                        ],
+                        backgroundColor: [
+                            '#ef4444',
+                            '#f97316',
+                            '#eab308',
+                            '#3b82f6',
+                            '#10b981'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // 其他圖表初始化...
+        }
+    </script>
+</body>
+</html>

@@ -377,18 +377,26 @@ export class TwseScraperService {
     });
     const url = `https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?${query}`;
 
+    console.log(`🔍 TWSE API URL: ${url}`);
     const response = await firstValueFrom(this.httpService.get(url));
+    console.log(`📊 TWSE API 狀態: ${response.data.stat}`);
+    console.log(`📈 Tables 數量: ${response.data.tables?.length || 0}`);
+    console.log(`📋 Table 8 資料數量: ${response.data.tables?.[8]?.data?.length || 0}`);
+    
     const json = response.data.stat === 'OK' && response.data;
     if (!json) {
+      console.log('❌ TWSE API 無有效資料');
       return null;
     }
 
     return json.tables[8].data.map((row) => {
-      const [symbol, name, ...values] = row;
-      const closePrice = numeral(values[6]).value();
-      const change = values[7].includes('green')
-        ? numeral(values[8]).multiply(-1).value()
-        : numeral(values[8]).value();
+      // TWSE API 欄位順序: [證券代號, 證券名稱, 成交股數, 成交筆數, 成交金額, 開盤價, 最高價, 最低價, 收盤價, 漲跌(+/-), 漲跌價差, 最後揭示買價, 最後揭示買量, 最後揭示賣價, 最後揭示賣量, 本益比, 殖利率(%)]
+      const [symbol, name, tradeVolume, transaction, tradeValue, openPrice, highPrice, lowPrice, closePrice, direction, change] = row;
+      
+      const parsedClosePrice = numeral(closePrice).value();
+      const parsedChange = direction === '<p style="color:green">' 
+        ? -numeral(change).value() 
+        : numeral(change).value();
 
       const data: {
         date: string;
@@ -407,17 +415,17 @@ export class TwseScraperService {
         date,
         symbol,
         name,
-        openPrice: numeral(values[3]).value(),
-        highPrice: numeral(values[4]).value(),
-        lowPrice: numeral(values[5]).value(),
-        closePrice,
-        tradeVolume: numeral(values[0]).value(),
-        tradeValue: numeral(values[2]).value(),
-        transaction: numeral(values[1]).value(),
-        change,
-        changePercent: closePrice
-          ? +numeral(change)
-              .divide(closePrice - change)
+        openPrice: numeral(openPrice).value(),
+        highPrice: numeral(highPrice).value(),
+        lowPrice: numeral(lowPrice).value(),
+        closePrice: parsedClosePrice,
+        tradeVolume: numeral(tradeVolume).value(),
+        tradeValue: numeral(tradeValue).value(),
+        transaction: numeral(transaction).value(),
+        change: parsedChange,
+        changePercent: parsedClosePrice && parsedChange
+          ? +numeral(parsedChange)
+              .divide(parsedClosePrice - parsedChange)
               .multiply(100)
               .format('0.00')
           : 0,

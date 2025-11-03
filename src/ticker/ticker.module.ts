@@ -4,7 +4,9 @@ import { CommonModule } from '../common/common.module';
 import { ScraperModule } from '../scraper/scraper.module';
 import { TickerRepository } from './ticker.repository';
 import { Ticker, TickerSchema } from './ticker.schema';
+
 import { TickerService } from './ticker.service';
+import { TickerController } from './ticker.controller';
 
 @Module({
   imports: [
@@ -12,6 +14,7 @@ import { TickerService } from './ticker.service';
     ScraperModule,
     forwardRef(() => CommonModule),
   ],
+  controllers: [TickerController],
   providers: [TickerRepository, TickerService],
   exports: [TickerRepository, TickerService],
 })

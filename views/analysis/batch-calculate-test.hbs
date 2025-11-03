@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- 導航欄 -->
+    <nav class="bg-blue-600 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold">📊 {{title}}</h1>
+                <p class="text-blue-200">批量計算歷史技術指標</p>
+            </div>
+            <div class="flex space-x-4">
+                <a href="/analysis" class="hover:bg-blue-700 px-3 py-2 rounded">← 返回總覽</a>
+                <a href="/admin/fetch-data" class="hover:bg-blue-700 px-3 py-2 rounded">資料管理</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto mt-8 p-4">
+        <!-- 統計資訊 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">📈 資料同步狀況</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">原始資料日期</p>
+                    <p class="text-2xl font-bold text-blue-600">{{missingData.totalTickerDates}}</p>
+                    <p class="text-xs text-gray-500">交易日</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">已計算日期</p>
+                    <p class="text-2xl font-bold text-green-600">{{missingData.totalTechDates}}</p>
+                    <p class="text-xs text-gray-500">技術指標</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">待計算日期</p>
+                    <p class="text-2xl font-bold text-orange-600">{{missingData.missingCount}}</p>
+                    <p class="text-xs text-gray-500">需要處理</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">完成率</p>
+                    <p class="text-2xl font-bold text-purple-600" id="completionRate">0%</p>
+                    <p class="text-xs text-gray-500">同步進度</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 批量計算控制面板 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">🔧 批量計算工具</h2>
+            
+            <!-- 單日計算 -->
+            <div class="border-b pb-4 mb-4">
+                <h3 class="text-lg font-medium text-gray-700 mb-3">單日計算</h3>
+                <div class="flex items-center space-x-4">
+                    <input 
+                        type="date" 
+                        id="singleDate" 
+                        class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value="2025-01-02"
+                    >
+                    <button 
+                        onclick="calculateSingleDate()" 
+                        class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                        id="singleCalculateBtn"
+                    >
+                        計算技術指標
+                    </button>
+                </div>
+            </div>
+
+            <!-- 測試按鈕 -->
+            <div class="border-b pb-4 mb-4">
+                <h3 class="text-lg font-medium text-gray-700 mb-3">測試功能</h3>
+                <button 
+                    onclick="testFunction()" 
+                    class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+                >
+                    測試按鈕
+                </button>
+                <div id="testOutput" class="mt-2 p-2 bg-gray-100 rounded"></div>
+            </div>
+        </div>
+
+        <!-- 日誌區域 -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">📋 執行日誌</h2>
+            <div id="logContainer" class="log-container bg-gray-50 p-4 rounded border">
+                <p class="text-gray-500 text-sm">準備就緒</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 測試函數
+        function testFunction() {
+            console.log('測試按鈕被點擊了');
+            document.getElementById('testOutput').innerHTML = '測試按鈕正常工作！時間：' + new Date().toLocaleString();
+            addLog('測試按鈕被點擊', 'info');
+        }
+
+        // 日誌函數
+        function addLog(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                info: 'text-blue-600',
+                success: 'text-green-600', 
+                error: 'text-red-600',
+                warning: 'text-yellow-600'
+            };
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = `text-sm ${colors[type] || colors.info} mb-1`;
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // 單日計算函數
+        async function calculateSingleDate() {
+            const date = document.getElementById('singleDate').value;
+            if (!date) {
+                alert('請選擇日期');
+                return;
+            }
+
+            addLog(`開始計算 ${date} 的技術指標...`, 'info');
+            
+            try {
+                const response = await fetch('/technical-analysis/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog(`✅ ${result.message}`, 'success');
+                } else {
+                    addLog(`❌ ${result.message}`, 'error');
+                }
+            } catch (error) {
+                addLog(`❌ 計算失敗: ${error.message}`, 'error');
+            }
+        }
+
+        // 頁面載入完成後初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            addLog('批量計算工具已準備就緒', 'info');
+            
+            // 計算完成率
+            const totalTech = {{missingData.totalTechDates}};
+            const totalTicker = {{missingData.totalTickerDates}};
+            const percentage = totalTicker > 0 ? Math.round((totalTech / totalTicker) * 100) : 0;
+            document.getElementById('completionRate').textContent = percentage + '%';
+        });
+    </script>
+</body>
+</html>

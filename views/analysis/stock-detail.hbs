@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{stockInfo.symbol}} {{stockInfo.name}} - 技術分析</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+        .indicator-chart {
+            position: relative;
+            height: 200px;
+            margin-bottom: 15px;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            transition: transform 0.2s ease-in-out;
+        }
+        .signal-strong { background: linear-gradient(45deg, #059669, #10b981); }
+        .signal-weak { background: linear-gradient(45deg, #7c3aed, #8b5cf6); }
+        .signal-neutral { background: linear-gradient(45deg, #6b7280, #9ca3af); }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- 導航欄 -->
+    <nav class="bg-blue-600 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-4">
+                <a href="/analysis" class="hover:text-blue-200">← 返回總覽</a>
+                <h1 class="text-2xl font-bold">{{stockInfo.symbol}} {{stockInfo.name}}</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span class="text-sm">更新時間: {{lastUpdate}}</span>
+                <button onclick="refreshData()" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded text-sm">
+                    🔄 刷新
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto mt-6 p-4">
+        <!-- 股票基本資訊 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-6">
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">收盤價</p>
+                    <p class="text-3xl font-bold text-gray-900">${{stockInfo.closePrice}}</p>
+                    <p class="text-sm {{#if (gt stockInfo.changePercent 0)}}text-green-600{{else}}text-red-600{{/if}}">
+                        {{#if (gt stockInfo.changePercent 0)}}+{{/if}}{{stockInfo.changePercent}}%
+                    </p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">技術評分</p>
+                    <p class="text-2xl font-bold text-blue-600">{{technicalAnalysis.technicalScore}}</p>
+                    <div class="mt-1">
+                        <span class="px-2 py-1 text-xs rounded-full {{getRecommendationClass technicalAnalysis.recommendation}}">
+                            {{getRecommendationText technicalAnalysis.recommendation}}
+                        </span>
+                    </div>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">成交量</p>
+                    <p class="text-xl font-semibold text-gray-900">{{formatVolume stockInfo.volume}}</p>
+                    <p class="text-sm text-gray-600">{{stockInfo.tradeValue}}</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">漲跌幅</p>
+                    <p class="text-xl font-semibold {{#if (gt stockInfo.changePercent 0)}}text-green-600{{else}}text-red-600{{/if}}">
+                        {{#if (gt stockInfo.changePercent 0)}}+{{/if}}{{stockInfo.change}}
+                    </p>
+                    <p class="text-sm text-gray-600">幅度 {{stockInfo.changePercent}}%</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">市場類型</p>
+                    <p class="text-lg font-semibold text-gray-900">{{stockInfo.market}}</p>
+                    <p class="text-sm text-gray-600">{{stockInfo.industry}}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 技術指標信號 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">📊 技術指標信號</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- 買進信號 -->
+                <div class="bg-green-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-green-800 mb-3">買進信號</h4>
+                    <div class="space-y-2">
+                        {{#if technicalAnalysis.signals.macdBuy}}
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                            <span class="text-sm">MACD 黃金交叉</span>
+                        </div>
+                        {{/if}}
+                        {{#if technicalAnalysis.signals.kdGoldenCross}}
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                            <span class="text-sm">KD 黃金交叉</span>
+                        </div>
+                        {{/if}}
+                        {{#if technicalAnalysis.signals.rsiOversold}}
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                            <span class="text-sm">RSI 超賣反彈</span>
+                        </div>
+                        {{/if}}
+                        {{#if technicalAnalysis.signals.bollingerBuySignal}}
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                            <span class="text-sm">布林帶突破</span>
+                        </div>
+                        {{/if}}
+                        {{#unless (or technicalAnalysis.signals.macdBuy technicalAnalysis.signals.kdGoldenCross technicalAnalysis.signals.rsiOversold technicalAnalysis.signals.bollingerBuySignal)}}
+                        <p class="text-sm text-gray-500">目前無買進信號</p>
+                        {{/unless}}
+                    </div>
+                </div>
+
+                <!-- 賣出信號 -->
+                <div class="bg-red-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-red-800 mb-3">賣出信號</h4>
+                    <div class="space-y-2">
+                        {{#if technicalAnalysis.signals.macdSell}}
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                            <span class="text-sm">MACD 死亡交叉</span>
+                        </div>
+                        {{/if}}
+                        {{#if technicalAnalysis.signals.kdDeathCross}}
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                            <span class="text-sm">KD 死亡交叉</span>
+                        </div>
+                        {{/if}}
+                        {{#if technicalAnalysis.signals.rsiOverbought}}
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                            <span class="text-sm">RSI 超買回調</span>
+                        </div>
+                        {{/if}}
+                        {{#if technicalAnalysis.signals.bollingerSellSignal}}
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                            <span class="text-sm">布林帶反轉</span>
+                        </div>
+                        {{/if}}
+                        {{#unless (or technicalAnalysis.signals.macdSell technicalAnalysis.signals.kdDeathCross technicalAnalysis.signals.rsiOverbought technicalAnalysis.signals.bollingerSellSignal)}}
+                        <p class="text-sm text-gray-500">目前無賣出信號</p>
+                        {{/unless}}
+                    </div>
+                </div>
+
+                <!-- 中性信號 -->
+                <div class="bg-yellow-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-yellow-800 mb-3">趨勢狀態</h4>
+                    <div class="space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-sm">短期趨勢</span>
+                            <span class="text-sm font-semibold {{getTrendClass technicalAnalysis.shortTermTrend}}">
+                                {{getTrendText technicalAnalysis.shortTermTrend}}
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-sm">中期趨勢</span>
+                            <span class="text-sm font-semibold {{getTrendClass technicalAnalysis.mediumTermTrend}}">
+                                {{getTrendText technicalAnalysis.mediumTermTrend}}
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-sm">長期趨勢</span>
+                            <span class="text-sm font-semibold {{getTrendClass technicalAnalysis.longTermTrend}}">
+                                {{getTrendText technicalAnalysis.longTermTrend}}
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-sm">支撐位</span>
+                            <span class="text-sm font-semibold">${{technicalAnalysis.supportLevel}}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-sm">阻力位</span>
+                            <span class="text-sm font-semibold">${{technicalAnalysis.resistanceLevel}}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 圖表區域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- K線圖 -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">📈 K線圖與移動平均線</h3>
+                <div class="chart-container">
+                    <canvas id="candlestickChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 技術指標圖 -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">📊 技術指標圖</h3>
+                <div class="chart-container">
+                    <canvas id="technicalChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 詳細技術指標 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- RSI -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h4 class="font-semibold text-gray-800 mb-3">RSI 相對強弱指標</h4>
+                <div class="text-center">
+                    <p class="text-3xl font-bold {{getRSIClass technicalAnalysis.rsi}}">
+                        {{technicalAnalysis.rsi}}
+                    </p>
+                    <p class="text-sm text-gray-600 mt-1">{{getRSIText technicalAnalysis.rsi}}</p>
+                </div>
+                <div class="indicator-chart">
+                    <canvas id="rsiChart"></canvas>
+                </div>
+            </div>
+
+            <!-- MACD -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h4 class="font-semibold text-gray-800 mb-3">MACD 指標</h4>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-sm">MACD</span>
+                        <span class="font-semibold">{{technicalAnalysis.macd}}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm">信號線</span>
+                        <span class="font-semibold">{{technicalAnalysis.macdSignal}}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm">柱狀圖</span>
+                        <span class="font-semibold {{#if (gt technicalAnalysis.macdHistogram 0)}}text-green-600{{else}}text-red-600{{/if}}">
+                            {{technicalAnalysis.macdHistogram}}
+                        </span>
+                    </div>
+                </div>
+                <div class="indicator-chart">
+                    <canvas id="macdChart"></canvas>
+                </div>
+            </div>
+
+            <!-- KD -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h4 class="font-semibold text-gray-800 mb-3">KD 隨機指標</h4>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-sm">K值</span>
+                        <span class="font-semibold">{{technicalAnalysis.kValue}}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm">D值</span>
+                        <span class="font-semibold">{{technicalAnalysis.dValue}}</span>
+                    </div>
+                    <div class="text-center mt-3">
+                        <span class="px-2 py-1 text-xs rounded-full {{getKDClass technicalAnalysis.kValue technicalAnalysis.dValue}}">
+                            {{getKDText technicalAnalysis.kValue technicalAnalysis.dValue}}
+                        </span>
+                    </div>
+                </div>
+                <div class="indicator-chart">
+                    <canvas id="kdChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 布林帶 -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h4 class="font-semibold text-gray-800 mb-3">布林帶</h4>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-sm">上軌</span>
+                        <span class="font-semibold">${{technicalAnalysis.bollingerUpper}}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm">中軌</span>
+                        <span class="font-semibold">${{technicalAnalysis.bollingerMiddle}}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm">下軌</span>
+                        <span class="font-semibold">${{technicalAnalysis.bollingerLower}}</span>
+                    </div>
+                    <div class="text-center mt-3">
+                        <span class="px-2 py-1 text-xs rounded-full {{getBollingerClass stockInfo.closePrice technicalAnalysis.bollingerUpper technicalAnalysis.bollingerLower}}">
+                            {{getBollingerText stockInfo.closePrice technicalAnalysis.bollingerUpper technicalAnalysis.bollingerLower}}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 移動平均線表格 -->
+        <div class="mt-6">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">📊 移動平均線分析</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">均線</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">數值</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">與收盤價比較</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">趨勢</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">MA5</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${{technicalAnalysis.ma5}}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm {{getMAComparisonClass stockInfo.closePrice technicalAnalysis.ma5}}">
+                                    {{getMAComparisonText stockInfo.closePrice technicalAnalysis.ma5}}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">短期</td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">MA20</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${{technicalAnalysis.ma20}}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm {{getMAComparisonClass stockInfo.closePrice technicalAnalysis.ma20}}">
+                                    {{getMAComparisonText stockInfo.closePrice technicalAnalysis.ma20}}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">中期</td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">MA60</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${{technicalAnalysis.ma60}}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm {{getMAComparisonClass stockInfo.closePrice technicalAnalysis.ma60}}">
+                                    {{getMAComparisonText stockInfo.closePrice technicalAnalysis.ma60}}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">長期</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 輔助函數
+        function formatVolume(volume) {
+            if (volume >= 1000000) {
+                return (volume / 1000000).toFixed(2) + 'M';
+            } else if (volume >= 1000) {
+                return (volume / 1000).toFixed(2) + 'K';
+            }
+            return volume;
+        }
+
+        function getRecommendationClass(recommendation) {
+            switch(recommendation) {
+                case 'strong_buy': return 'bg-green-100 text-green-800';
+                case 'buy': return 'bg-blue-100 text-blue-800';
+                case 'hold': return 'bg-yellow-100 text-yellow-800';
+                case 'sell': return 'bg-orange-100 text-orange-800';
+                case 'strong_sell': return 'bg-red-100 text-red-800';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+        function getRecommendationText(recommendation) {
+            switch(recommendation) {
+                case 'strong_buy': return '強烈買進';
+                case 'buy': return '買進';
+                case 'hold': return '持有';
+                case 'sell': return '賣出';
+                case 'strong_sell': return '強烈賣出';
+                default: return '-';
+            }
+        }
+
+        function getTrendClass(trend) {
+            switch(trend) {
+                case 'upward': return 'text-green-600';
+                case 'downward': return 'text-red-600';
+                case 'sideways': return 'text-yellow-600';
+                default: return 'text-gray-600';
+            }
+        }
+
+        function getTrendText(trend) {
+            switch(trend) {
+                case 'upward': return '上升';
+                case 'downward': return '下降';
+                case 'sideways': return '盤整';
+                default: return '-';
+            }
+        }
+
+        function getRSIClass(rsi) {
+            if (rsi >= 70) return 'text-red-600';
+            if (rsi <= 30) return 'text-green-600';
+            return 'text-blue-600';
+        }
+
+        function getRSIText(rsi) {
+            if (rsi >= 70) return '超買';
+            if (rsi <= 30) return '超賣';
+            return '正常';
+        }
+
+        function refreshData() {
+            location.reload();
+        }
+
+        // 初始化圖表
+        document.addEventListener('DOMContentLoaded', function() {
+            // 這裡將初始化各種圖表
+            // K線圖、技術指標圖、RSI圖、MACD圖、KD圖等
+            initCharts();
+        });
+
+        function initCharts() {
+            // 從API獲取圖表數據並渲染
+            fetch(`/api/chart/candlestick/{{stockInfo.symbol}}`)
+                .then(response => response.json())
+                .then(data => {
+                    renderCandlestickChart(data);
+                });
+
+            fetch(`/api/chart/technical/{{stockInfo.symbol}}`)
+                .then(response => response.json())
+                .then(data => {
+                    renderTechnicalChart(data);
+                });
+        }
+
+        function renderCandlestickChart(data) {
+            // 渲染K線圖邏輯
+        }
+
+        function renderTechnicalChart(data) {
+            // 渲染技術指標圖邏輯
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 20px;
+        }
+        .metric-card {
+            transition: transform 0.2s ease-in-out;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+        }
+        .signal-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- 導航欄 -->
+    <nav class="bg-blue-600 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold">📈 台灣股市技術分析系統</h1>
+                <p class="text-blue-200">專業級技術指標與視覺化分析</p>
+            </div>
+            <div class="flex space-x-4">
+                <a href="/analysis" class="hover:bg-blue-700 px-3 py-2 rounded">總覽</a>
+                <a href="/analysis/dashboard" class="hover:bg-blue-700 px-3 py-2 rounded">儀表板</a>
+                <a href="/analysis/signals" class="hover:bg-blue-700 px-3 py-2 rounded">買賣信號</a>
+                <a href="/analysis/rankings" class="hover:bg-blue-700 px-3 py-2 rounded">排行榜</a>
+                <a href="/analysis/batch-calculate" class="hover:bg-blue-700 px-3 py-2 rounded">批量計算</a>
+                <a href="/admin/fetch-data" class="hover:bg-blue-700 px-3 py-2 rounded">資料管理</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto mt-8 p-4">
+        <!-- 日期選擇 -->
+        <div class="bg-white rounded-lg shadow-lg p-4 mb-6">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-semibold text-gray-800">市場技術分析概況</h2>
+                <div class="flex items-center space-x-4">
+                    <label class="text-sm font-medium text-gray-700">選擇日期:</label>
+                    <input 
+                        type="date" 
+                        id="analysisDate" 
+                        value="{{currentDate}}"
+                        class="border border-gray-300 rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onchange="changeDate()"
+                    >
+                </div>
+            </div>
+        </div>
+
+        <!-- 無資料提示 -->
+        {{#unless marketOverview.hasData}}
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-yellow-800">
+                        <strong>{{currentDate}}</strong> 沒有技術分析資料。顯示的是基本股票資料，無法提供技術指標分析。
+                    </p>
+                </div>
+            </div>
+        </div>
+        {{/unless}}
+
+        <!-- 市場概況卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">總股票數</p>
+                        <p class="text-2xl font-bold text-gray-900">{{marketOverview.totalStocks}}</p>
+                    </div>
+                    <div class="p-3 bg-blue-100 rounded-full">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">買進信號</p>
+                        <p class="text-2xl font-bold text-green-600">{{marketOverview.buySignalCount}}</p>
+                    </div>
+                    <div class="p-3 bg-green-100 rounded-full">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">賣出信號</p>
+                        <p class="text-2xl font-bold text-red-600">{{marketOverview.sellSignalCount}}</p>
+                    </div>
+                    <div class="p-3 bg-red-100 rounded-full">
+                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">市場情緒</p>
+                        <p class="text-lg font-bold {{#if (eq marketOverview.marketSentiment 'bullish')}}text-green-600{{else}}text-red-600{{/if}}">
+                            {{#if (eq marketOverview.marketSentiment 'bullish')}}🐂 看漲{{else}}🐻 看跌{{/if}}
+                        </p>
+                    </div>
+                    <div class="p-3 {{#if (eq marketOverview.marketSentiment 'bullish')}}bg-green-100{{else}}bg-red-100{{/if}} rounded-full">
+                        <svg class="w-6 h-6 {{#if (eq marketOverview.marketSentiment 'bullish')}}text-green-600{{else}}text-red-600{{/if}}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- 技術評分排行榜 -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">🏆 技術評分前10名</h3>
+                <div class="space-y-3">
+                    {{#each topRated}}
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-sm font-bold text-gray-500 w-6">{{@index}}</span>
+                            <div>
+                                <p class="font-semibold text-gray-900">{{this.symbol}}</p>
+                                <p class="text-sm text-gray-600">{{this.name}}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-lg text-blue-600">{{this.technicalScore}}</p>
+                            <span class="signal-badge {{getRecommendationClass this.recommendation}}">
+                                {{getRecommendationText this.recommendation}}
+                            </span>
+                        </div>
+                    </div>
+                    {{/each}}
+                </div>
+                <div class="mt-4 text-center">
+                    <a href="/analysis/rankings?type=technical" class="text-blue-600 hover:text-blue-800 font-medium">查看完整排行榜 →</a>
+                </div>
+            </div>
+
+            <!-- 買進信號股票 -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">📈 買進信號股票</h3>
+                <div class="space-y-3">
+                    {{#each buySignals}}
+                    <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+                        <div>
+                            <p class="font-semibold text-gray-900">{{this.symbol}}</p>
+                            <p class="text-sm text-gray-600">{{this.name}}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-gray-900">${{this.closePrice}}</p>
+                            <div class="flex space-x-1">
+                                {{#if this.signals.macdBuy}}<span class="signal-badge bg-blue-100 text-blue-800">MACD</span>{{/if}}
+                                {{#if this.signals.kdGoldenCross}}<span class="signal-badge bg-yellow-100 text-yellow-800">KD</span>{{/if}}
+                                {{#if this.signals.rsiOversold}}<span class="signal-badge bg-purple-100 text-purple-800">RSI</span>{{/if}}
+                            </div>
+                        </div>
+                    </div>
+                    {{/each}}
+                </div>
+                <div class="mt-4 text-center">
+                    <a href="/analysis/signals" class="text-green-600 hover:text-green-800 font-medium">查看所有買進信號 →</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 賣出信號股票 -->
+        {{#if sellSignals.length}}
+        <div class="mt-8">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">📉 賣出信號股票</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {{#each sellSignals}}
+                    <div class="p-3 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="font-semibold text-gray-900">{{this.symbol}}</p>
+                                <p class="text-sm text-gray-600">{{this.name}}</p>
+                                <p class="font-bold text-gray-900 mt-1">${{this.closePrice}}</p>
+                            </div>
+                            <div class="text-right">
+                                <div class="flex flex-col space-y-1">
+                                    {{#if this.signals.macdSell}}<span class="signal-badge bg-red-100 text-red-800">MACD</span>{{/if}}
+                                    {{#if this.signals.kdDeathCross}}<span class="signal-badge bg-orange-100 text-orange-800">KD</span>{{/if}}
+                                    {{#if this.signals.rsiOverbought}}<span class="signal-badge bg-pink-100 text-pink-800">RSI</span>{{/if}}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {{/each}}
+                </div>
+                <div class="mt-4 text-center">
+                    <a href="/analysis/signals" class="text-red-600 hover:text-red-800 font-medium">查看所有賣出信號 →</a>
+                </div>
+            </div>
+        </div>
+        {{/if}}
+
+        <!-- 股票搜尋 -->
+        <div class="mt-8">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">🔍 股票技術分析查詢</h3>
+                <div class="flex space-x-4">
+                    <input 
+                        type="text" 
+                        id="stockSymbol" 
+                        placeholder="輸入股票代號 (例: 2330)"
+                        class="flex-1 border border-gray-300 rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                    <button 
+                        onclick="searchStock()" 
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md transition duration-200"
+                    >
+                        查詢分析
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Handlebars 輔助函數
+        function getRecommendationClass(recommendation) {
+            switch(recommendation) {
+                case 'strong_buy': return 'bg-green-100 text-green-800';
+                case 'buy': return 'bg-blue-100 text-blue-800';
+                case 'hold': return 'bg-yellow-100 text-yellow-800';
+                case 'sell': return 'bg-orange-100 text-orange-800';
+                case 'strong_sell': return 'bg-red-100 text-red-800';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+        function getRecommendationText(recommendation) {
+            switch(recommendation) {
+                case 'strong_buy': return '強烈買進';
+                case 'buy': return '買進';
+                case 'hold': return '持有';
+                case 'sell': return '賣出';
+                case 'strong_sell': return '強烈賣出';
+                default: return '-';
+            }
+        }
+
+        // 日期改變
+        function changeDate() {
+            const date = document.getElementById('analysisDate').value;
+            if (date) {
+                window.location.href = `/analysis?date=${date}`;
+            }
+        }
+
+        // 搜尋股票
+        function searchStock() {
+            const symbol = document.getElementById('stockSymbol').value.trim();
+            if (symbol) {
+                window.location.href = `/analysis/stock/${symbol}`;
+            } else {
+                alert('請輸入股票代號');
+            }
+        }
+
+        // 按 Enter 鍵搜尋
+        document.getElementById('stockSymbol').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchStock();
+            }
+        });
+
+        // 頁面載入完成後的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 日期選擇器已經通過 value="{{currentDate}}" 設定，不需要額外處理
+        });
+    </script>
+</body>
+</html>

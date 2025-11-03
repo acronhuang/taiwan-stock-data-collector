@@ -348,48 +348,59 @@ export class TickerService {
 
   @Cron('0 0 15-21/2 * * *')
   async updateTwseEquitiesQuotes(date: string = DateTime.local().toISODate()) {
-    const updated = await this.twseScraperService
-      .fetchEquitiesQuotes({ date })
-      .then(
-        (data) =>
-          data &&
-          data.map((ticker) => ({
-            date: ticker.date,
-            type: TickerType.Equity,
-            exchange: Exchange.TWSE,
-            market: Market.TSE,
-            symbol: ticker.symbol,
-            name: ticker.name,
-            openPrice: ticker.openPrice,
-            highPrice: ticker.highPrice,
-            lowPrice: ticker.lowPrice,
-            closePrice: ticker.closePrice,
-            change: ticker.change,
-            changePercent: ticker.changePercent,
-            tradeVolume: ticker.tradeVolume,
-            tradeValue: ticker.tradeValue,
-            transaction: ticker.transaction,
-          })),
-      )
-      .then(
-        (data) =>
-          data &&
-          Promise.all(
-            data.map((ticker) => this.tickerRepository.updateTicker(ticker)),
-          ),
-      );
+    // 檢查是否為假日
+    if (await this.holidayService.isHoliday(date)) {
+      this.logger.log(`${date} 為假日，跳過上市個股收盤行情更新`);
+      return false;
+    }
 
-    if (updated)
-      Logger.log(`${date} 上市個股收盤行情: 已更新`, TickerService.name);
-    else
-      Logger.warn(
-        `${date} 上市個股收盤行情: 尚無資料或非交易日`,
-        TickerService.name,
-      );
+    const fetchedData = await this.twseScraperService.fetchEquitiesQuotes({ date });
+    console.log(`🔍 抓取到的資料數量: ${fetchedData?.length || 0}`);
+    
+    if (!fetchedData || fetchedData.length === 0) {
+      Logger.warn(`${date} 上市個股收盤行情: 尚無資料或非交易日`, TickerService.name);
+      return false;
+    }
+
+    const tickerData = fetchedData.map((ticker) => ({
+      date: ticker.date,
+      type: TickerType.Equity,
+      exchange: Exchange.TWSE,
+      market: Market.TSE,
+      symbol: ticker.symbol,
+      name: ticker.name,
+      openPrice: ticker.openPrice,
+      highPrice: ticker.highPrice,
+      lowPrice: ticker.lowPrice,
+      closePrice: ticker.closePrice,
+      change: ticker.change,
+      changePercent: ticker.changePercent,
+      tradeVolume: ticker.tradeVolume,
+      tradeValue: ticker.tradeValue,
+      transaction: ticker.transaction,
+    }));
+
+    console.log(`💾 準備儲存的資料數量: ${tickerData.length}`);
+    console.log(`🎯 第一筆資料樣本:`, tickerData[0]);
+
+    const updateResults = await Promise.all(
+      tickerData.map((ticker) => this.tickerRepository.updateTicker(ticker))
+    );
+    
+    console.log(`📊 更新結果: ${updateResults.length} 筆操作完成`);
+    console.log(`✅ 成功更新: ${updateResults.filter(r => r.modifiedCount > 0 || r.upsertedCount > 0).length} 筆`);
+
+    Logger.log(`${date} 上市個股收盤行情: 已更新`, TickerService.name);
+    return true;
   }
 
   @Cron('0 0 15-21/2 * * *')
   async updateTpexEquitiesQuotes(date: string = DateTime.local().toISODate()) {
+    // 檢查是否為假日
+    if (await this.holidayService.isHoliday(date)) {
+      this.logger.log(`${date} 為假日，跳過上櫃個股收盤行情更新`);
+      return false;
+    }
     const updated = await this.tpexScraperService
       .fetchEquitiesQuotes({ date })
       .then(

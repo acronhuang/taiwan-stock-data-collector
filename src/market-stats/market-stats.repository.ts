@@ -85,4 +85,29 @@ export class MarketStatsRepository {
 
     return { updated: false, reason: 'data_identical' };
   }
+
+  /**
+   * 取得指定日期範圍的市場統計資料
+   */
+  async getMarketStatsRange(
+    startDate: string,
+    endDate: string,
+  ): Promise<MarketStatsDocument[]> {
+    return this.model
+      .find({
+        date: {
+          $gte: startDate,
+          $lte: endDate,
+        },
+      })
+      .sort({ date: 1 })
+      .exec();
+  }
+
+  /**
+   * 取得最新的N筆市場統計資料
+   */
+  async getLatestMarketStats(limit: number = 30): Promise<MarketStatsDocument[]> {
+    return this.model.find().sort({ date: -1 }).limit(limit).exec();
+  }
 }

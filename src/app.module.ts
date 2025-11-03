@@ -9,6 +9,8 @@ import { MarketStatsService } from './market-stats/market-stats.service';
 import { ScraperModule } from './scraper/scraper.module';
 import { TickerModule } from './ticker/ticker.module';
 import { TickerService } from './ticker/ticker.service';
+import { TechnicalAnalysisModule } from './technical-analysis/technical-analysis.module';
+import { ChartModule } from './chart/chart.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { TickerService } from './ticker/ticker.service';
     MarketStatsModule,
     TickerModule,
     CommonModule,
+    TechnicalAnalysisModule,
+    ChartModule,
   ],
 })
 export class AppModule implements OnApplicationBootstrap {

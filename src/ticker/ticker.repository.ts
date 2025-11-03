@@ -12,6 +12,15 @@ export class TickerRepository {
 
   async updateTicker(ticker: Partial<Ticker>) {
     const { date, symbol } = ticker;
+    
+    // 只對前幾筆資料記錄調試信息
+    if (parseInt(symbol) < 1000 || symbol === '0050') {
+      console.log(`🔧 嘗試更新: ${symbol} (${date})`, ticker);
+      const result = await this.model.updateOne({ date, symbol }, ticker, { upsert: true });
+      console.log(`📝 更新結果 ${symbol}: matched=${result.matchedCount}, modified=${result.modifiedCount}, upserted=${result.upsertedCount}`);
+      return result;
+    }
+    
     return this.model.updateOne({ date, symbol }, ticker, { upsert: true });
   }
 
@@ -103,5 +112,79 @@ export class TickerRepository {
     }
 
     return { updated, skipped, total: tickers.length };
+  }
+
+  /**
+   * 取得指定日期的所有股票資料
+   */
+  async getTickersByDate(date: string): Promise<TickerDocument[]> {
+    return this.model.find({ date }).sort({ symbol: 1 }).exec();
+  }
+
+  /**
+   * 取得指定股票的歷史資料
+   */
+  async getHistoricalTickers(
+    symbol: string,
+    startDate?: string,
+    endDate?: string,
+    limit?: number,
+  ): Promise<TickerDocument[]> {
+    const query: any = { symbol };
+
+    if (startDate || endDate) {
+      query.date = {};
+      if (startDate) query.date.$gte = startDate;
+      if (endDate) query.date.$lte = endDate;
+    }
+
+    let queryBuilder = this.model.find(query).sort({ date: -1 });
+    if (limit) {
+      queryBuilder = queryBuilder.limit(limit);
+    }
+
+    return queryBuilder.exec();
+  }
+
+  /**
+   * 獲取日期範圍內有資料的日期
+   */
+  async getAvailableDates(startDate: string, endDate: string): Promise<string[]> {
+    const query: any = {
+      date: {
+        $gte: startDate,
+        $lte: endDate,
+      },
+    };
+    
+    return this.model.distinct('date', query);
+  }
+
+  /**
+   * 獲取所有有資料的日期
+   */
+  async getAllAvailableDates(): Promise<string[]> {
+    return this.model.distinct('date');
+  }
+
+  /**
+   * 按日期查找ticker (別名)
+   */
+  async findByDate(date: string): Promise<TickerDocument[]> {
+    return this.getTickersByDate(date);
+  }
+
+  /**
+   * 查找歷史數據 (別名)
+   */
+  async findHistoricalData(symbol: string, beforeDate: string, limit: number): Promise<TickerDocument[]> {
+    return this.getHistoricalTickers(symbol, undefined, beforeDate, limit);
+  }
+
+  /**
+   * 獲取所有日期 (別名)
+   */
+  async getAllDates(): Promise<string[]> {
+    return this.getAllAvailableDates();
   }
 }
