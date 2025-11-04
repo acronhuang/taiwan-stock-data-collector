@@ -1,0 +1,684 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+import { DateTime } from 'luxon';
+import { TechnicalIndicatorRepository } from './technical-indicator.repository';
+import { TickerRepository } from '../ticker/ticker.repository';
+import { TickerService } from '../ticker/ticker.service';
+import { TechnicalIndicator } from './technical-indicator.schema';
+
+@Injectable()
+export class TechnicalAnalysisService {
+  private readonly logger = new Logger(TechnicalAnalysisService.name);
+
+  constructor(
+    private readonly technicalIndicatorRepository: TechnicalIndicatorRepository,
+    private readonly tickerRepository: TickerRepository,
+    private readonly tickerService: TickerService,
+  ) {}
+
+  /**
+   * 計算簡單移動平均線 (SMA)
+   */
+  private calculateSMA(prices: number[], period: number): number | null {
+    if (prices.length < period) return null;
+    const sum = prices.slice(0, period).reduce((acc, price) => acc + price, 0);
+    return sum / period;
+  }
+
+  /**
+   * 計算指數移動平均線 (EMA)
+   */
+  private calculateEMA(
+    prices: number[],
+    period: number,
+    previousEMA?: number,
+  ): number | null {
+    if (prices.length === 0) return null;
+
+    const currentPrice = prices[0];
+    const multiplier = 2 / (period + 1);
+
+    if (previousEMA === undefined) {
+      // 初始EMA使用SMA
+      if (prices.length < period) return null;
+      const sma = this.calculateSMA(prices, period);
+      return sma;
+    }
+
+    return currentPrice * multiplier + previousEMA * (1 - multiplier);
+  }
+
+  /**
+   * 計算RSI相對強弱指標
+   */
+  private calculateRSI(prices: number[], period: number): number | null {
+    if (prices.length < period + 1) return null;
+
+    let gains = 0;
+    let losses = 0;
+
+    // 計算前period天的平均漲跌
+    for (let i = 0; i < period; i++) {
+      const change = prices[i] - prices[i + 1];
+      if (change > 0) {
+        gains += change;
+      } else {
+        losses += Math.abs(change);
+      }
+    }
+
+    const avgGain = gains / period;
+    const avgLoss = losses / period;
+
+    if (avgLoss === 0) return 100;
+
+    const rs = avgGain / avgLoss;
+    return 100 - 100 / (1 + rs);
+  }
+
+  /**
+   * 計算MACD指標
+   */
+  private calculateMACD(
+    prices: number[],
+    fastPeriod: number = 12,
+    slowPeriod: number = 26,
+    signalPeriod: number = 9,
+  ): {
+    macd: number | null;
+    signal: number | null;
+    histogram: number | null;
+  } {
+    const ema12 = this.calculateEMA(prices, fastPeriod);
+    const ema26 = this.calculateEMA(prices, slowPeriod);
+
+    if (ema12 === null || ema26 === null) {
+      return { macd: null, signal: null, histogram: null };
+    }
+
+    const macd = ema12 - ema26;
+
+    // 簡化版信號線計算
+    const signal = macd; // 實際應該計算MACD的EMA
+    const histogram = macd - signal;
+
+    return { macd, signal, histogram };
+  }
+
+  /**
+   * 計算KD隨機指標
+   */
+  private calculateKD(
+    highs: number[],
+    lows: number[],
+    closes: number[],
+    period: number = 9,
+  ): { k: number | null; d: number | null } {
+    if (highs.length < period || lows.length < period || closes.length < period) {
+      return { k: null, d: null };
+    }
+
+    const highestHigh = Math.max(...highs.slice(0, period));
+    const lowestLow = Math.min(...lows.slice(0, period));
+    const currentClose = closes[0];
+
+    if (highestHigh === lowestLow) {
+      return { k: 50, d: 50 };
+    }
+
+    const k = ((currentClose - lowestLow) / (highestHigh - lowestLow)) * 100;
+    const d = k; // 簡化版，實際應該計算K的移動平均
+
+    return { k, d };
+  }
+
+  /**
+   * 計算威廉指標 (%R)
+   */
+  private calculateWilliamsR(
+    highs: number[],
+    lows: number[],
+    closes: number[],
+    period: number,
+  ): number | null {
+    if (highs.length < period || lows.length < period || closes.length < period) {
+      return null;
+    }
+
+    const highestHigh = Math.max(...highs.slice(0, period));
+    const lowestLow = Math.min(...lows.slice(0, period));
+    const currentClose = closes[0];
+
+    if (highestHigh === lowestLow) return -50;
+
+    return ((highestHigh - currentClose) / (highestHigh - lowestLow)) * -100;
+  }
+
+  /**
+   * 計算布林通道
+   */
+  private calculateBollingerBands(
+    prices: number[],
+    period: number = 20,
+    multiplier: number = 2,
+  ): {
+    upper: number | null;
+    middle: number | null;
+    lower: number | null;
+    width: number | null;
+  } {
+    const ma = this.calculateSMA(prices, period);
+    if (ma === null) {
+      return { upper: null, middle: null, lower: null, width: null };
+    }
+
+    // 計算標準差
+    const variance =
+      prices
+        .slice(0, period)
+        .reduce((acc, price) => acc + Math.pow(price - ma, 2), 0) / period;
+    const stdDev = Math.sqrt(variance);
+
+    const upper = ma + multiplier * stdDev;
+    const lower = ma - multiplier * stdDev;
+    const width = upper - lower;
+
+    return { upper, middle: ma, lower, width };
+  }
+
+  /**
+   * 分析買賣信號
+   */
+  private analyzeSignals(
+    currentData: any,
+    previousData?: any,
+  ): TechnicalIndicator['signals'] {
+    const signals: TechnicalIndicator['signals'] = {
+      macdBuy: false,
+      macdSell: false,
+      rsiOverbought: false,
+      rsiOversold: false,
+      kdGoldenCross: false,
+      kdDeathCross: false,
+      volumeBreakout: false,
+      priceBreakout: false,
+      bollingerBuySignal: false,
+      bollingerSellSignal: false,
+      williamsOversold: false,
+      williamsOverbought: false,
+    };
+
+    // MACD 信號
+    if (currentData.macd > currentData.macdSignal) {
+      signals.macdBuy = true;
+    } else if (currentData.macd < currentData.macdSignal) {
+      signals.macdSell = true;
+    }
+
+    // RSI 信號
+    if (currentData.rsi12 > 70) {
+      signals.rsiOverbought = true;
+    } else if (currentData.rsi12 < 30) {
+      signals.rsiOversold = true;
+    }
+
+    // KD 交叉信號
+    if (previousData) {
+      if (
+        currentData.k9 > currentData.d9 &&
+        previousData.k9 <= previousData.d9
+      ) {
+        signals.kdGoldenCross = true;
+      } else if (
+        currentData.k9 < currentData.d9 &&
+        previousData.k9 >= previousData.d9
+      ) {
+        signals.kdDeathCross = true;
+      }
+    }
+
+    // 成交量突破
+    if (currentData.volumeRatio > 2) {
+      signals.volumeBreakout = true;
+    }
+
+    // 價格突破
+    if (currentData.closePrice > currentData.resistanceLevel) {
+      signals.priceBreakout = true;
+    }
+
+    // 布林帶信號
+    if (currentData.bbUpper && currentData.bbLower) {
+      if (currentData.closePrice <= currentData.bbLower) {
+        signals.bollingerBuySignal = true; // 觸及下軌，買進信號
+      } else if (currentData.closePrice >= currentData.bbUpper) {
+        signals.bollingerSellSignal = true; // 觸及上軌，賣出信號
+      }
+    }
+
+    // 威廉指標信號
+    if (currentData.wr14) {
+      if (currentData.wr14 < -80) {
+        signals.williamsOversold = true; // 威廉超賣
+      } else if (currentData.wr14 > -20) {
+        signals.williamsOverbought = true; // 威廉超買
+      }
+    }
+
+    return signals;
+  }
+
+  /**
+   * 計算綜合技術評分
+   */
+  private calculateTechnicalScore(data: any): number {
+    let score = 0;
+
+    // 移動平均線評分
+    if (data.closePrice > data.ma5) score += 10;
+    if (data.closePrice > data.ma20) score += 15;
+    if (data.closePrice > data.ma60) score += 20;
+    if (data.ma5 > data.ma20) score += 10;
+    if (data.ma20 > data.ma60) score += 15;
+
+    // RSI 評分
+    if (data.rsi12 > 30 && data.rsi12 < 70) score += 10;
+    if (data.rsi12 < 30) score -= 20; // 超賣
+    if (data.rsi12 > 70) score -= 20; // 超買
+
+    // MACD 評分
+    if (data.macd > data.macdSignal) score += 15;
+    if (data.macd > 0) score += 10;
+
+    // KD 評分
+    if (data.k9 > data.d9) score += 10;
+    if (data.k9 < 20) score -= 10; // 超賣
+    if (data.k9 > 80) score -= 10; // 超買
+
+    // 成交量評分
+    if (data.volumeRatio > 1.5) score += 10;
+    if (data.volumeRatio < 0.5) score -= 5;
+
+    // 限制評分範圍
+    return Math.max(-100, Math.min(100, score));
+  }
+
+  /**
+   * 取得推薦等級
+   */
+  private getRecommendation(score: number): string {
+    if (score >= 60) return 'strong_buy';
+    if (score >= 30) return 'buy';
+    if (score >= -30) return 'hold';
+    if (score >= -60) return 'sell';
+    return 'strong_sell';
+  }
+
+  /**
+   * 為指定股票計算技術指標
+   */
+  async calculateTechnicalIndicators(
+    symbol: string,
+    date: string,
+  ): Promise<Partial<TechnicalIndicator> | null> {
+    try {
+      // 取得當天資料
+      const currentData = await this.tickerRepository.getTicker(date, symbol);
+      if (!currentData) {
+        this.logger.warn(`No ticker data found for ${symbol} on ${date}`);
+        return null;
+      }
+
+      // 取得過去60天的歷史資料 (計算技術指標需要足夠的歷史資料)
+      const startDate = DateTime.fromISO(date).minus({ days: 60 }).toISODate();
+      const historicalTickers = await this.tickerRepository.getHistoricalTickers(
+        symbol,
+        startDate,
+        date,
+        60,
+      );
+
+      if (!historicalTickers || historicalTickers.length < 5) {
+        this.logger.warn(`Insufficient historical data for ${symbol}`);
+        // 如果歷史資料不足，仍然保存基本資料但技術指標設為null
+        return {
+          date,
+          symbol,
+          name: currentData.name,
+          type: currentData.type === 'Equity' ? 'stock' : 'index',
+          openPrice: currentData.openPrice,
+          highPrice: currentData.highPrice,
+          lowPrice: currentData.lowPrice,
+          closePrice: currentData.closePrice,
+          volume: currentData.tradeVolume,
+            supportLevel: (typeof currentData.lowPrice === 'number' && !isNaN(currentData.lowPrice)) ? currentData.lowPrice * 0.95 : null,
+            resistanceLevel: (typeof currentData.highPrice === 'number' && !isNaN(currentData.highPrice)) ? currentData.highPrice * 1.05 : null,
+          technicalScore: 50, // 中性評分
+          recommendation: 'hold',
+          signals: {
+            macdBuy: false,
+            macdSell: false,
+            rsiOverbought: false,
+            rsiOversold: false,
+            kdGoldenCross: false,
+            kdDeathCross: false,
+            volumeBreakout: false,
+            priceBreakout: false,
+            bollingerBuySignal: false,
+            bollingerSellSignal: false,
+            williamsOversold: false,
+            williamsOverbought: false,
+          },
+        };
+      }
+
+      // 準備價格資料 (從最新到最舊排序)
+      const sortedData = historicalTickers.sort((a, b) => 
+        DateTime.fromISO(b.date).toMillis() - DateTime.fromISO(a.date).toMillis()
+      );
+      
+      const prices = sortedData.map(d => d.closePrice);
+      const highs = sortedData.map(d => d.highPrice);
+      const lows = sortedData.map(d => d.lowPrice);
+      const volumes = sortedData.map(d => d.tradeVolume);
+
+      // 計算各種技術指標
+      const ma5 = this.calculateSMA(prices, 5);
+      const ma20 = this.calculateSMA(prices, 20);
+      const ma60 = this.calculateSMA(prices, 60);
+      const rsi12 = this.calculateRSI(prices, 12);
+      const macdResult = this.calculateMACD(prices);
+      const kdResult = this.calculateKD(highs, lows, prices);
+      const wr10 = this.calculateWilliamsR(highs, lows, prices, 10);
+      const bbResult = this.calculateBollingerBands(prices);
+
+      const technicalData = {
+        date,
+        symbol,
+        name: currentData.name,
+        type: currentData.type === 'Equity' ? 'stock' : 'index',
+        openPrice: currentData.openPrice,
+        highPrice: currentData.highPrice,
+        lowPrice: currentData.lowPrice,
+        closePrice: currentData.closePrice,
+        volume: currentData.tradeVolume,
+        ma5,
+        ma20,
+        ma60,
+        rsi12,
+        macd: macdResult.macd,
+        macdSignal: macdResult.signal,
+        macdHistogram: macdResult.histogram,
+        k9: kdResult.k,
+        d9: kdResult.d,
+        wr10,
+        bbUpper: bbResult.upper,
+        bbMiddle: bbResult.middle,
+        bbLower: bbResult.lower,
+        bbWidth: bbResult.width,
+        volumeMa5: this.calculateSMA(volumes, 5) || volumes[0],
+        volumeRatio: volumes.length > 1 ? volumes[0] / (volumes.reduce((a, b) => a + b, 0) / volumes.length) : 1.0,
+        supportLevel: (currentData.lowPrice && !isNaN(currentData.lowPrice)) ? currentData.lowPrice * 0.95 : currentData.closePrice * 0.95,
+        resistanceLevel: (currentData.highPrice && !isNaN(currentData.highPrice)) ? currentData.highPrice * 1.05 : currentData.closePrice * 1.05,
+      };
+
+      // 計算信號和評分
+      const signals = this.analyzeSignals(technicalData);
+      const technicalScore = this.calculateTechnicalScore(technicalData);
+      const recommendation = this.getRecommendation(technicalScore);
+
+      return {
+        ...technicalData,
+        signals,
+        technicalScore,
+        recommendation,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error calculating technical indicators for ${symbol} on ${date}:`,
+        error.message,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * 批次計算技術指標
+   */
+  async batchCalculateTechnicalIndicators(date: string): Promise<void> {
+    this.logger.log(`開始計算 ${date} 的技術指標`);
+
+    try {
+      // 取得該日期所有股票資料
+      const tickers = await this.tickerRepository.getTickersByDate(date);
+      if (!tickers || tickers.length === 0) {
+        this.logger.warn(`No ticker data found for ${date}`);
+        return;
+      }
+
+      const technicalIndicators: Partial<TechnicalIndicator>[] = [];
+
+      for (const ticker of tickers) {
+        const indicators = await this.calculateTechnicalIndicators(
+          ticker.symbol,
+          date,
+        );
+        if (indicators) {
+          technicalIndicators.push(indicators);
+        }
+      }
+
+      // 批次儲存技術指標
+      const result = await this.technicalIndicatorRepository.batchUpsert(
+        technicalIndicators,
+      );
+
+      this.logger.log(
+        `${date} 技術指標計算完成: 成功 ${result.updated} 筆, 錯誤 ${result.errors} 筆`,
+      );
+    } catch (error) {
+      this.logger.error(`計算技術指標失敗 ${date}:`, error.message);
+    }
+  }
+
+  /**
+   * 每日自動計算技術指標 (晚上9點執行)
+   */
+  // @Cron('0 0 21 * * 1-5')
+  async scheduledCalculateTechnicalIndicators(): Promise<void> {
+    const today = DateTime.local().toISODate();
+    await this.batchCalculateTechnicalIndicators(today);
+  }
+
+  /**
+   * 取得技術分析報告
+   */
+  async getTechnicalAnalysisReport(
+    symbol: string,
+    days: number = 30,
+  ): Promise<any> {
+    // 找到該股票最新的有效資料日期
+    const latestData = await this.technicalIndicatorRepository.getLatestTechnicalIndicator(symbol);
+    if (!latestData) {
+      return { error: `No technical analysis data found for ${symbol}` };
+    }
+    
+    const endDate = latestData.date;
+    const startDate = DateTime.fromISO(endDate).minus({ days }).toISODate();
+
+    const indicators = await this.technicalIndicatorRepository.getTechnicalIndicators(
+      symbol,
+      startDate,
+      endDate,
+    );
+
+    if (indicators.length === 0) {
+      return { error: `No technical analysis data found for ${symbol}` };
+    }
+
+    return {
+      symbol: latestData.symbol,
+      name: latestData.name,
+      date: latestData.date,
+      currentPrice: latestData.closePrice,
+      technicalScore: latestData.technicalScore,
+      recommendation: latestData.recommendation,
+      indicators: {
+        ma5: latestData.ma5,
+        ma20: latestData.ma20,
+        ma60: latestData.ma60,
+        rsi12: latestData.rsi12,
+        macd: latestData.macd,
+        k9: latestData.k9,
+        d9: latestData.d9,
+      },
+      signals: latestData.signals,
+      historicalData: indicators.reverse(), // 時間順序
+    };
+  }
+
+  /**
+   * 取得市場技術分析概況
+   */
+  async getMarketTechnicalOverview(date?: string): Promise<any> {
+    let targetDate = date;
+    let hasData = true;
+    
+    // 如果沒有指定日期，使用資料庫中最新的有效日期
+    if (!targetDate) {
+      const latestData = await this.technicalIndicatorRepository.getLatestTechnicalIndicator('2330');
+      targetDate = latestData?.date || DateTime.local().toISODate();
+    } else {
+      // 檢查指定日期是否有資料
+      const dataCount = await this.technicalIndicatorRepository.getDataCount(targetDate, targetDate);
+      hasData = dataCount > 0;
+    }
+
+    let topRated, buySignals, sellSignals, totalCount;
+    
+    if (hasData) {
+      [topRated, buySignals, sellSignals, totalCount] = await Promise.all([
+        this.technicalIndicatorRepository.getTopRatedStocks(targetDate, 10),
+        this.technicalIndicatorRepository.getBuySignalStocks(targetDate),
+        this.technicalIndicatorRepository.getSellSignalStocks(targetDate),
+        this.technicalIndicatorRepository.getDataCount(targetDate, targetDate),
+      ]);
+    } else {
+      // 沒有資料時返回空陣列和零值
+      topRated = [];
+      buySignals = [];
+      sellSignals = [];
+      totalCount = 0;
+    }
+
+    return {
+      date: targetDate,
+      hasData,
+      totalStocks: totalCount,
+      topRatedStocks: topRated.map((stock) => ({
+        symbol: stock.symbol,
+        name: stock.name,
+        score: stock.technicalScore,
+        recommendation: stock.recommendation,
+        currentPrice: stock.closePrice,
+      })),
+      buySignalCount: buySignals.length,
+      sellSignalCount: sellSignals.length,
+      marketSentiment:
+        buySignals.length > sellSignals.length ? 'bullish' : 'bearish',
+    };
+  }
+
+  /**
+   * 取得買進信號股票
+   */
+  async getBuySignalStocks(date: string) {
+    return this.technicalIndicatorRepository.getBuySignalStocks(date);
+  }
+
+  /**
+   * 取得賣出信號股票
+   */
+  async getSellSignalStocks(date: string) {
+    return this.technicalIndicatorRepository.getSellSignalStocks(date);
+  }
+
+  /**
+   * 取得評分最高的股票
+   */
+  async getTopRatedStocks(date: string, limit: number = 20) {
+    return this.technicalIndicatorRepository.getTopRatedStocks(date, limit);
+  }
+
+  /**
+   * 取得技術指標歷史資料
+   */
+  async getTechnicalIndicatorHistory(
+    symbol: string,
+    startDate?: string,
+    endDate?: string,
+    limit?: number,
+  ) {
+    return this.technicalIndicatorRepository.getTechnicalIndicators(
+      symbol,
+      startDate,
+      endDate,
+      limit,
+    );
+  }
+
+  /**
+   * 取得技術指標統計資料
+   */
+  async getTechnicalStats(date: string) {
+    const [totalCount, buySignals, sellSignals] = await Promise.all([
+      this.technicalIndicatorRepository.getDataCount(date, date),
+      this.technicalIndicatorRepository.getBuySignalStocks(date),
+      this.technicalIndicatorRepository.getSellSignalStocks(date),
+    ]);
+
+    return {
+      totalStocks: totalCount,
+      buySignals: buySignals.length,
+      sellSignals: sellSignals.length,
+      neutralSignals: totalCount - buySignals.length - sellSignals.length,
+      bullishRatio: totalCount > 0 ? (buySignals.length / totalCount) * 100 : 0,
+      bearishRatio: totalCount > 0 ? (sellSignals.length / totalCount) * 100 : 0,
+    };
+  }
+
+  /**
+   * 獲取日期範圍內有原始資料的日期
+   */
+  async getAvailableDatesInRange(startDate: string, endDate: string): Promise<string[]> {
+    // 這裡需要查詢 tickers collection 來獲取有資料的日期
+    const availableDates = await this.tickerRepository.getAvailableDates(startDate, endDate);
+    return availableDates.sort();
+  }
+
+  /**
+   * 獲取缺少技術指標的日期列表
+   */
+  async getMissingTechnicalIndicatorDates(): Promise<{
+    totalTickerDates: number;
+    totalTechDates: number;
+    missingDates: string[];
+    missingCount: number;
+  }> {
+    // 獲取所有有 ticker 資料的日期
+    const allTickerDates = await this.tickerRepository.getAllAvailableDates();
+    
+    // 獲取所有已計算技術指標的日期
+    const techDates = await this.technicalIndicatorRepository.getAllDates();
+    
+    // 找出缺少技術指標的日期
+    const missingDates = allTickerDates.filter(date => !techDates.includes(date));
+    
+    return {
+      totalTickerDates: allTickerDates.length,
+      totalTechDates: techDates.length,
+      missingDates: missingDates.sort(),
+      missingCount: missingDates.length,
+    };
+  }
+}

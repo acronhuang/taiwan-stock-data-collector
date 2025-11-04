@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .progress-bar {
+            transition: width 0.3s ease-in-out;
+        }
+        .log-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- 導航欄 -->
+    <nav class="bg-blue-600 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold">📊 {{title}}</h1>
+                <p class="text-blue-200">批量計算歷史技術指標</p>
+            </div>
+            <div class="flex space-x-4">
+                <a href="/analysis" class="hover:bg-blue-700 px-3 py-2 rounded">← 返回總覽</a>
+                <a href="/admin/fetch-data" class="hover:bg-blue-700 px-3 py-2 rounded">資料管理</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto mt-8 p-4">
+        <!-- 統計資訊 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">📈 資料同步狀況</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">原始資料日期</p>
+                    <p class="text-2xl font-bold text-blue-600">{{missingData.totalTickerDates}}</p>
+                    <p class="text-xs text-gray-500">交易日</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">已計算日期</p>
+                    <p class="text-2xl font-bold text-green-600">{{missingData.totalTechDates}}</p>
+                    <p class="text-xs text-gray-500">技術指標</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">待計算日期</p>
+                    <p class="text-2xl font-bold text-orange-600">{{missingData.missingCount}}</p>
+                    <p class="text-xs text-gray-500">需要處理</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-sm text-gray-600">完成率</p>
+                    <p class="text-2xl font-bold text-purple-600" id="completionRate">0%</p>
+                    <p class="text-xs text-gray-500">同步進度</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 批量計算控制面板 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">🔧 批量計算工具</h2>
+            
+            <!-- 單日計算 -->
+            <div class="border-b pb-4 mb-4">
+                <h3 class="text-lg font-medium text-gray-700 mb-3">單日計算</h3>
+                <div class="flex items-center space-x-4">
+                    <input 
+                        type="date" 
+                        id="singleDate" 
+                        class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value="2025-01-02"
+                    >
+                    <button 
+                        onclick="calculateSingleDate()" 
+                        class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                        id="singleCalculateBtn"
+                    >
+                        計算技術指標
+                    </button>
+                </div>
+            </div>
+
+            <!-- 日期範圍計算 -->
+            <div class="border-b pb-4 mb-4">
+                <h3 class="text-lg font-medium text-gray-700 mb-3">日期範圍計算</h3>
+                <div class="flex items-center space-x-4">
+                    <div>
+                        <label class="block text-sm text-gray-600">開始日期</label>
+                        <input 
+                            type="date" 
+                            id="startDate" 
+                            class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            value="2025-01-02"
+                        >
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-600">結束日期</label>
+                        <input 
+                            type="date" 
+                            id="endDate" 
+                            class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            value="2025-01-31"
+                        >
+                    </div>
+                    <div class="pt-5">
+                        <button 
+                            onclick="calculateDateRange()" 
+                            class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+                            id="rangeCalculateBtn"
+                        >
+                            批量計算
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 全部缺失日期計算 -->
+            <div>
+                <h3 class="text-lg font-medium text-gray-700 mb-3">全部缺失日期</h3>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">計算所有 {{missingData.missingCount}} 個缺失的日期</p>
+                        <p class="text-xs text-gray-500">⚠️ 大量資料計算需要較長時間，請耐心等待</p>
+                    </div>
+                    <button 
+                        onclick="calculateAllMissing()" 
+                        class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors"
+                        id="allCalculateBtn"
+                    >
+                        計算全部
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 進度顯示 -->
+        <div id="progressContainer" class="bg-white rounded-lg shadow-lg p-6 mb-6" style="display: none;">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">📊 計算進度</h2>
+            <div class="mb-4">
+                <div class="flex justify-between text-sm text-gray-600 mb-1">
+                    <span>進度</span>
+                    <span id="progressText">0 / 0</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-blue-600 h-2 rounded-full progress-bar" id="progressBar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="currentTask" class="text-sm text-gray-600 mb-2"></div>
+            <button onclick="stopCalculation()" class="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">停止計算</button>
+        </div>
+
+        <!-- 計算日誌 -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">📝 計算日誌</h2>
+            <div id="logContainer" class="log-container bg-gray-50 p-4 rounded border">
+                <p class="text-gray-500 text-sm">等待開始計算...</p>
+            </div>
+            <div class="mt-4 flex space-x-2">
+                <button onclick="clearLog()" class="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600">清除日誌</button>
+                <button onclick="refreshStatus()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">刷新狀態</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isCalculating = false;
+        let currentAbortController = null;
+
+        // 添加日誌
+        function addLog(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            const colorClass = {
+                'info': 'text-blue-600',
+                'success': 'text-green-600',
+                'error': 'text-red-600',
+                'warning': 'text-orange-600'
+            }[type] || 'text-gray-600';
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = `text-sm mb-1 ${colorClass}`;
+            logEntry.innerHTML = `<span class="text-gray-400">[${timestamp}]</span> ${message}`;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // 更新進度
+        function updateProgress(current, total, currentTask = '') {
+            const percentage = total > 0 ? Math.round((current / total) * 100) : 0;
+            document.getElementById('progressBar').style.width = percentage + '%';
+            document.getElementById('progressText').textContent = `${current} / ${total}`;
+            document.getElementById('currentTask').textContent = currentTask;
+        }
+
+        // 顯示/隱藏進度容器
+        function toggleProgress(show) {
+            const container = document.getElementById('progressContainer');
+            container.style.display = show ? 'block' : 'none';
+        }
+
+        // 設置按鈕狀態
+        function setButtonsDisabled(disabled) {
+            const buttons = ['singleCalculateBtn', 'rangeCalculateBtn', 'allCalculateBtn'];
+            buttons.forEach(id => {
+                const btn = document.getElementById(id);
+                btn.disabled = disabled;
+                if (disabled) {
+                    btn.classList.add('opacity-50', 'cursor-not-allowed');
+                } else {
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            });
+        }
+
+        // 單日計算
+        async function calculateSingleDate() {
+            if (isCalculating) return;
+            
+            const date = document.getElementById('singleDate').value;
+            if (!date) {
+                alert('請選擇日期');
+                return;
+            }
+
+            isCalculating = true;
+            setButtonsDisabled(true);
+            toggleProgress(true);
+            
+            addLog(`開始計算 ${date} 的技術指標...`, 'info');
+            updateProgress(0, 1, `計算 ${date}`);
+
+            try {
+                const response = await fetch('/technical-analysis/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ date })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog(`✅ ${result.message}`, 'success');
+                    updateProgress(1, 1, '計算完成');
+                    
+                    // 3秒後自動刷新頁面
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                } else {
+                    addLog(`❌ ${result.message}`, 'error');
+                }
+            } catch (error) {
+                addLog(`❌ 計算失敗: ${error.message}`, 'error');
+            }
+
+            isCalculating = false;
+            setButtonsDisabled(false);
+        }
+
+        // 日期範圍計算
+        async function calculateDateRange() {
+            if (isCalculating) return;
+            
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (!startDate || !endDate) {
+                alert('請選擇開始和結束日期');
+                return;
+            }
+
+            if (startDate > endDate) {
+                alert('開始日期不能大於結束日期');
+                return;
+            }
+
+            isCalculating = true;
+            setButtonsDisabled(true);
+            toggleProgress(true);
+            
+            addLog(`開始批量計算 ${startDate} 到 ${endDate} 的技術指標...`, 'info');
+
+            try {
+                currentAbortController = new AbortController();
+                
+                const response = await fetch('/technical-analysis/batch-calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        startDate, 
+                        endDate, 
+                        mode: 'range' 
+                    }),
+                    signal: currentAbortController.signal
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog(`✅ ${result.message}`, 'success');
+                    
+                    // 顯示詳細結果
+                    if (result.results) {
+                        result.results.forEach(item => {
+                            if (item.status === 'success') {
+                                addLog(`  ✓ ${item.date} 計算成功`, 'success');
+                            } else {
+                                addLog(`  ✗ ${item.date} 計算失敗: ${item.error}`, 'error');
+                            }
+                        });
+                    }
+                    
+                    updateProgress(result.totalDates, result.totalDates, '全部完成');
+                    
+                    // 5秒後自動刷新頁面
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 5000);
+                } else {
+                    addLog(`❌ ${result.message}`, 'error');
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    addLog('❌ 計算已取消', 'warning');
+                } else {
+                    addLog(`❌ 批量計算失敗: ${error.message}`, 'error');
+                }
+            }
+
+            isCalculating = false;
+            setButtonsDisabled(false);
+            currentAbortController = null;
+        }
+
+        // 計算全部缺失日期
+        async function calculateAllMissing() {
+            if (isCalculating) return;
+            
+            const missingCount = {{missingData.missingCount}};
+            if (missingCount === 0) {
+                alert('沒有缺失的日期需要計算');
+                return;
+            }
+
+            if (!confirm(`確定要計算全部 ${missingCount} 個缺失的日期嗎？這可能需要很長時間。`)) {
+                return;
+            }
+
+            isCalculating = true;
+            setButtonsDisabled(true);
+            toggleProgress(true);
+            
+            addLog(`開始計算全部 ${missingCount} 個缺失日期的技術指標...`, 'info');
+
+            try {
+                currentAbortController = new AbortController();
+                
+                const response = await fetch('/technical-analysis/batch-calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        dates: {{{json missingData.missingDates}}}, 
+                        mode: 'list' 
+                    }),
+                    signal: currentAbortController.signal
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    addLog(`✅ ${result.message}`, 'success');
+                    
+                    // 顯示詳細結果
+                    if (result.results) {
+                        let successCount = 0;
+                        result.results.forEach(item => {
+                            if (item.status === 'success') {
+                                successCount++;
+                                addLog(`  ✓ ${item.date} 計算成功 (${successCount}/${result.totalDates})`, 'success');
+                            } else {
+                                addLog(`  ✗ ${item.date} 計算失敗: ${item.error}`, 'error');
+                            }
+                        });
+                    }
+                    
+                    updateProgress(result.totalDates, result.totalDates, '全部完成');
+                    
+                    // 5秒後自動刷新頁面
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 5000);
+                } else {
+                    addLog(`❌ ${result.message}`, 'error');
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    addLog('❌ 計算已取消', 'warning');
+                } else {
+                    addLog(`❌ 批量計算失敗: ${error.message}`, 'error');
+                }
+            }
+
+            isCalculating = false;
+            setButtonsDisabled(false);
+            currentAbortController = null;
+        }
+
+        // 停止計算
+        function stopCalculation() {
+            if (currentAbortController) {
+                currentAbortController.abort();
+                addLog('正在停止計算...', 'warning');
+            }
+        }
+
+        // 清除日誌
+        function clearLog() {
+            document.getElementById('logContainer').innerHTML = '<p class="text-gray-500 text-sm">日誌已清除</p>';
+        }
+
+        // 刷新狀態
+        async function refreshStatus() {
+            addLog('正在刷新狀態...', 'info');
+            window.location.reload();
+        }
+
+        // 頁面載入完成後初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            addLog('批量計算工具已準備就緒', 'info');
+            
+            // 設置默認日期
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('endDate').value = today;
+            
+            // 計算完成率
+            const totalTech = parseInt('{{missingData.totalTechDates}}') || 0;
+            const totalTicker = parseInt('{{missingData.totalTickerDates}}') || 0;
+            const percentage = totalTicker > 0 ? Math.round((totalTech / totalTicker) * 100) : 0;
+            document.getElementById('completionRate').textContent = percentage + '%';
+        });
+    </script>
+
+    <!-- Handlebars Helper -->
+    <script>
+        // 計算百分比的 Helper 函數已內建在 JavaScript 中
+        function calculatePercentage(current, total) {
+            return total > 0 ? Math.round((current / total) * 100) : 0;
+        }
+    </script>
+</body>
+</html>

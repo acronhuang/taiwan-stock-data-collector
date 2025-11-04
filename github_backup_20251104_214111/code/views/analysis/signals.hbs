@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>買賣信號 - 技術分析系統</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .signal-card:hover {
+            transform: translateY(-1px);
+            transition: transform 0.2s ease-in-out;
+        }
+        .signal-strong {
+            border-left: 4px solid #10b981;
+        }
+        .signal-medium {
+            border-left: 4px solid #3b82f6;
+        }
+        .signal-weak {
+            border-left: 4px solid #f59e0b;
+        }
+        .filter-active {
+            background-color: #3b82f6;
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- 導航欄 -->
+    <nav class="bg-blue-600 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold">📊 買賣信號分析</h1>
+                <p class="text-blue-200">基於技術指標的投資信號</p>
+            </div>
+            <div class="flex space-x-4">
+                <a href="/analysis" class="hover:bg-blue-700 px-3 py-2 rounded">總覽</a>
+                <a href="/analysis/dashboard" class="hover:bg-blue-700 px-3 py-2 rounded">儀表板</a>
+                <a href="/analysis/rankings" class="hover:bg-blue-700 px-3 py-2 rounded">排行榜</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto mt-6 p-4">
+        <!-- 篩選器 -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <div class="flex flex-wrap gap-4 items-center justify-between">
+                <div class="flex flex-wrap gap-2">
+                    <h3 class="text-lg font-semibold text-gray-800 mr-4">信號篩選:</h3>
+                    <button onclick="filterSignals('all')" class="filter-btn px-4 py-2 rounded-md border transition-colors filter-active">
+                        全部 ({{totalSignals}})
+                    </button>
+                    <button onclick="filterSignals('buy')" class="filter-btn px-4 py-2 rounded-md border transition-colors">
+                        買進信號 ({{buySignalsCount}})
+                    </button>
+                    <button onclick="filterSignals('sell')" class="filter-btn px-4 py-2 rounded-md border transition-colors">
+                        賣出信號 ({{sellSignalsCount}})
+                    </button>
+                    <button onclick="filterSignals('strong')" class="filter-btn px-4 py-2 rounded-md border transition-colors">
+                        強烈信號 ({{strongSignalsCount}})
+                    </button>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <select id="marketFilter" onchange="filterByMarket()" class="border border-gray-300 rounded-md px-3 py-2">
+                        <option value="all">所有市場</option>
+                        <option value="twse">上市</option>
+                        <option value="tpex">上櫃</option>
+                    </select>
+                    <select id="sectorFilter" onchange="filterBySector()" class="border border-gray-300 rounded-md px-3 py-2">
+                        <option value="all">所有類股</option>
+                        {{#each sectors}}
+                        <option value="{{this}}">{{this}}</option>
+                        {{/each}}
+                    </select>
+                    <input type="text" id="searchInput" placeholder="搜尋股票代號或名稱" 
+                           class="border border-gray-300 rounded-md px-3 py-2" onkeyup="searchStocks()">
+                </div>
+            </div>
+        </div>
+
+        <!-- 信號統計 -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-green-100">強烈買進</p>
+                        <p class="text-3xl font-bold">{{signalStats.strongBuy}}</p>
+                    </div>
+                    <svg class="w-8 h-8 text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                    </svg>
+                </div>
+            </div>
+            
+            <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-blue-100">一般買進</p>
+                        <p class="text-3xl font-bold">{{signalStats.buy}}</p>
+                    </div>
+                    <svg class="w-8 h-8 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+                    </svg>
+                </div>
+            </div>
+            
+            <div class="bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-orange-100">一般賣出</p>
+                        <p class="text-3xl font-bold">{{signalStats.sell}}</p>
+                    </div>
+                    <svg class="w-8 h-8 text-orange-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                    </svg>
+                </div>
+            </div>
+            
+            <div class="bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-red-100">強烈賣出</p>
+                        <p class="text-3xl font-bold">{{signalStats.strongSell}}</p>
+                    </div>
+                    <svg class="w-8 h-8 text-red-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- 買進信號股票 -->
+        <div id="buySignalsSection" class="mb-8">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold text-gray-800">📈 買進信號股票</h3>
+                    <div class="flex items-center space-x-2">
+                        <label class="text-sm text-gray-600">排序:</label>
+                        <select id="buySortOrder" onchange="sortBuySignals()" class="border border-gray-300 rounded px-2 py-1 text-sm">
+                            <option value="score_desc">技術評分 (高→低)</option>
+                            <option value="change_desc">漲幅 (高→低)</option>
+                            <option value="volume_desc">成交量 (高→低)</option>
+                            <option value="signal_count_desc">信號數量 (多→少)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" id="buySignalsList">
+                    {{#each buySignals}}
+                    <div class="signal-card signal-{{getSignalStrength this.technicalScore}} bg-green-50 rounded-lg p-4 hover:shadow-md transition-shadow" 
+                         data-symbol="{{this.symbol}}" data-market="{{this.market}}" data-sector="{{this.sector}}">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h4 class="font-bold text-lg text-gray-900">{{this.symbol}}</h4>
+                                <p class="text-sm text-gray-600">{{this.name}}</p>
+                                <p class="text-xs text-gray-500">{{this.market}} • {{this.sector}}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-xl text-gray-900">${{this.closePrice}}</p>
+                                <p class="text-sm {{#if (gt this.changePercent 0)}}text-green-600{{else}}text-red-600{{/if}}">
+                                    {{#if (gt this.changePercent 0)}}+{{/if}}{{this.changePercent}}%
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <!-- 技術評分 -->
+                        <div class="mb-3">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-sm text-gray-600">技術評分</span>
+                                <span class="font-bold text-blue-600">{{this.technicalScore}}/100</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-blue-600 h-2 rounded-full" style="width: {{this.technicalScore}}%"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- 買進信號 -->
+                        <div class="mb-3">
+                            <p class="text-sm font-medium text-gray-700 mb-2">買進信號:</p>
+                            <div class="flex flex-wrap gap-1">
+                                {{#if this.signals.macdBuy}}
+                                <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">MACD黃金交叉</span>
+                                {{/if}}
+                                {{#if this.signals.kdGoldenCross}}
+                                <span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">KD黃金交叉</span>
+                                {{/if}}
+                                {{#if this.signals.rsiOversold}}
+                                <span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">RSI超賣反彈</span>
+                                {{/if}}
+                                {{#if this.signals.bollingerBuySignal}}
+                                <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">布林帶突破</span>
+                                {{/if}}
+                                {{#if this.signals.williamsOversold}}
+                                <span class="px-2 py-1 bg-indigo-100 text-indigo-800 text-xs rounded-full">威廉超賣</span>
+                                {{/if}}
+                            </div>
+                        </div>
+                        
+                        <!-- 支撐阻力 -->
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p class="text-gray-600">支撐位</p>
+                                <p class="font-semibold text-green-600">${{this.supportLevel}}</p>
+                            </div>
+                            <div>
+                                <p class="text-gray-600">阻力位</p>
+                                <p class="font-semibold text-red-600">${{this.resistanceLevel}}</p>
+                            </div>
+                        </div>
+                        
+                        <!-- 操作建議 -->
+                        <div class="mt-3 pt-3 border-t border-gray-200">
+                            <div class="flex justify-between items-center">
+                                <span class="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full font-medium">
+                                    {{getRecommendationText this.recommendation}}
+                                </span>
+                                <a href="/analysis/stock/{{this.symbol}}" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                    詳細分析 →
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+        </div>
+
+        <!-- 賣出信號股票 -->
+        <div id="sellSignalsSection" class="mb-8">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold text-gray-800">📉 賣出信號股票</h3>
+                    <div class="flex items-center space-x-2">
+                        <label class="text-sm text-gray-600">排序:</label>
+                        <select id="sellSortOrder" onchange="sortSellSignals()" class="border border-gray-300 rounded px-2 py-1 text-sm">
+                            <option value="score_asc">技術評分 (低→高)</option>
+                            <option value="change_asc">跌幅 (高→低)</option>
+                            <option value="volume_desc">成交量 (高→低)</option>
+                            <option value="signal_count_desc">信號數量 (多→少)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" id="sellSignalsList">
+                    {{#each sellSignals}}
+                    <div class="signal-card signal-{{getSignalStrength this.technicalScore}} bg-red-50 rounded-lg p-4 hover:shadow-md transition-shadow" 
+                         data-symbol="{{this.symbol}}" data-market="{{this.market}}" data-sector="{{this.sector}}">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h4 class="font-bold text-lg text-gray-900">{{this.symbol}}</h4>
+                                <p class="text-sm text-gray-600">{{this.name}}</p>
+                                <p class="text-xs text-gray-500">{{this.market}} • {{this.sector}}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-xl text-gray-900">${{this.closePrice}}</p>
+                                <p class="text-sm {{#if (gt this.changePercent 0)}}text-green-600{{else}}text-red-600{{/if}}">
+                                    {{#if (gt this.changePercent 0)}}+{{/if}}{{this.changePercent}}%
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <!-- 技術評分 -->
+                        <div class="mb-3">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-sm text-gray-600">技術評分</span>
+                                <span class="font-bold text-red-600">{{this.technicalScore}}/100</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-red-600 h-2 rounded-full" style="width: {{this.technicalScore}}%"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- 賣出信號 -->
+                        <div class="mb-3">
+                            <p class="text-sm font-medium text-gray-700 mb-2">賣出信號:</p>
+                            <div class="flex flex-wrap gap-1">
+                                {{#if this.signals.macdSell}}
+                                <span class="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">MACD死亡交叉</span>
+                                {{/if}}
+                                {{#if this.signals.kdDeathCross}}
+                                <span class="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">KD死亡交叉</span>
+                                {{/if}}
+                                {{#if this.signals.rsiOverbought}}
+                                <span class="px-2 py-1 bg-pink-100 text-pink-800 text-xs rounded-full">RSI超買回調</span>
+                                {{/if}}
+                                {{#if this.signals.bollingerSellSignal}}
+                                <span class="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">布林帶反轉</span>
+                                {{/if}}
+                                {{#if this.signals.williamsOverbought}}
+                                <span class="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">威廉超買</span>
+                                {{/if}}
+                            </div>
+                        </div>
+                        
+                        <!-- 支撐阻力 -->
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p class="text-gray-600">支撐位</p>
+                                <p class="font-semibold text-green-600">${{this.supportLevel}}</p>
+                            </div>
+                            <div>
+                                <p class="text-gray-600">阻力位</p>
+                                <p class="font-semibold text-red-600">${{this.resistanceLevel}}</p>
+                            </div>
+                        </div>
+                        
+                        <!-- 操作建議 -->
+                        <div class="mt-3 pt-3 border-t border-gray-200">
+                            <div class="flex justify-between items-center">
+                                <span class="px-3 py-1 bg-red-100 text-red-800 text-sm rounded-full font-medium">
+                                    {{getRecommendationText this.recommendation}}
+                                </span>
+                                <a href="/analysis/stock/{{this.symbol}}" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                    詳細分析 →
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+        </div>
+
+        <!-- 警告訊息 -->
+        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-yellow-700">
+                        <strong>投資警告:</strong> 以上信號僅供參考，投資前請務必進行個人研究和風險評估。技術分析無法保證投資收益，請謹慎投資。
+                        所有投資均有風險，過去表現不代表未來結果。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 篩選器功能
+        function filterSignals(type) {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('filter-active');
+            });
+            event.target.classList.add('filter-active');
+            
+            const buySection = document.getElementById('buySignalsSection');
+            const sellSection = document.getElementById('sellSignalsSection');
+            
+            switch(type) {
+                case 'all':
+                    buySection.style.display = 'block';
+                    sellSection.style.display = 'block';
+                    break;
+                case 'buy':
+                    buySection.style.display = 'block';
+                    sellSection.style.display = 'none';
+                    break;
+                case 'sell':
+                    buySection.style.display = 'none';
+                    sellSection.style.display = 'block';
+                    break;
+                case 'strong':
+                    buySection.style.display = 'block';
+                    sellSection.style.display = 'block';
+                    // 只顯示強烈信號
+                    filterByStrength('strong');
+                    break;
+            }
+        }
+
+        function filterByMarket() {
+            const market = document.getElementById('marketFilter').value;
+            filterCards('data-market', market);
+        }
+
+        function filterBySector() {
+            const sector = document.getElementById('sectorFilter').value;
+            filterCards('data-sector', sector);
+        }
+
+        function searchStocks() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const cards = document.querySelectorAll('.signal-card');
+            
+            cards.forEach(card => {
+                const symbol = card.getAttribute('data-symbol').toLowerCase();
+                const name = card.querySelector('p').textContent.toLowerCase();
+                
+                if (symbol.includes(query) || name.includes(query)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        function filterCards(attribute, value) {
+            const cards = document.querySelectorAll('.signal-card');
+            
+            cards.forEach(card => {
+                if (value === 'all' || card.getAttribute(attribute) === value) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        function filterByStrength(strength) {
+            const cards = document.querySelectorAll('.signal-card');
+            
+            cards.forEach(card => {
+                if (card.classList.contains(`signal-${strength}`)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        // 排序功能
+        function sortBuySignals() {
+            const order = document.getElementById('buySortOrder').value;
+            const container = document.getElementById('buySignalsList');
+            const cards = Array.from(container.children);
+            
+            cards.sort((a, b) => {
+                // 排序邏輯實現
+                return 0;
+            });
+            
+            cards.forEach(card => container.appendChild(card));
+        }
+
+        function sortSellSignals() {
+            const order = document.getElementById('sellSortOrder').value;
+            const container = document.getElementById('sellSignalsList');
+            const cards = Array.from(container.children);
+            
+            cards.sort((a, b) => {
+                // 排序邏輯實現
+                return 0;
+            });
+            
+            cards.forEach(card => container.appendChild(card));
+        }
+
+        // 輔助函數
+        function getSignalStrength(score) {
+            if (score >= 80) return 'strong';
+            if (score >= 60) return 'medium';
+            return 'weak';
+        }
+
+        function getRecommendationText(recommendation) {
+            switch(recommendation) {
+                case 'strong_buy': return '強烈買進';
+                case 'buy': return '買進';
+                case 'hold': return '持有';
+                case 'sell': return '賣出';
+                case 'strong_sell': return '強烈賣出';
+                default: return '-';
+            }
+        }
+    </script>
+</body>
+</html>

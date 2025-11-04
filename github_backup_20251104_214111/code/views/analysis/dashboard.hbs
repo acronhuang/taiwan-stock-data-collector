@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>市場儀表板 - 技術分析系統</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            height: 350px;
+            margin-bottom: 20px;
+        }
+        .small-chart {
+            position: relative;
+            height: 200px;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            transition: transform 0.2s ease-in-out;
+        }
+        .market-heat {
+            background: linear-gradient(135deg, #ef4444, #f97316, #eab308, #22c55e);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- 導航欄 -->
+    <nav class="bg-blue-600 text-white p-4 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold">📊 市場儀表板</h1>
+                <p class="text-blue-200">即時市場數據與技術分析概況</p>
+            </div>
+            <div class="flex space-x-4">
+                <a href="/analysis" class="hover:bg-blue-700 px-3 py-2 rounded">總覽</a>
+                <a href="/analysis/signals" class="hover:bg-blue-700 px-3 py-2 rounded">信號</a>
+                <a href="/analysis/rankings" class="hover:bg-blue-700 px-3 py-2 rounded">排行榜</a>
+                <button onclick="autoRefresh()" id="refreshBtn" class="bg-blue-700 hover:bg-blue-800 px-3 py-2 rounded">
+                    🔄 自動刷新: 關閉
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto mt-6 p-4">
+        <!-- 市場總覽指標 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+            <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">上市股票</p>
+                        <p class="text-2xl font-bold text-blue-600">{{marketStats.twseCount}}</p>
+                    </div>
+                    <div class="p-3 bg-blue-100 rounded-full">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <span class="text-sm {{#if (gt marketStats.twseChangePercent 0)}}text-green-600{{else}}text-red-600{{/if}}">
+                        {{#if (gt marketStats.twseChangePercent 0)}}+{{/if}}{{marketStats.twseChangePercent}}%
+                    </span>
+                </div>
+            </div>
+
+            <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">上櫃股票</p>
+                        <p class="text-2xl font-bold text-purple-600">{{marketStats.tpexCount}}</p>
+                    </div>
+                    <div class="p-3 bg-purple-100 rounded-full">
+                        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <span class="text-sm {{#if (gt marketStats.tpexChangePercent 0)}}text-green-600{{else}}text-red-600{{/if}}">
+                        {{#if (gt marketStats.tpexChangePercent 0)}}+{{/if}}{{marketStats.tpexChangePercent}}%
+                    </span>
+                </div>
+            </div>
+
+            <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">總成交金額</p>
+                        <p class="text-xl font-bold text-green-600">{{formatBillion marketStats.totalTradeValue}}</p>
+                    </div>
+                    <div class="p-3 bg-green-100 rounded-full">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <span class="text-sm text-gray-600">億元</span>
+                </div>
+            </div>
+
+            <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">上漲股票</p>
+                        <p class="text-2xl font-bold text-green-600">{{marketStats.risingCount}}</p>
+                    </div>
+                    <div class="p-3 bg-green-100 rounded-full">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <span class="text-sm text-green-600">{{marketStats.risingPercent}}%</span>
+                </div>
+            </div>
+
+            <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">下跌股票</p>
+                        <p class="text-2xl font-bold text-red-600">{{marketStats.fallingCount}}</p>
+                    </div>
+                    <div class="p-3 bg-red-100 rounded-full">
+                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <span class="text-sm text-red-600">{{marketStats.fallingPercent}}%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 主要圖表區域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- 市場指數圖 -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-gray-800">📈 市場指數走勢</h3>
+                    <div class="flex space-x-2">
+                        <button onclick="changeTimeframe('1D')" class="timeframe-btn px-3 py-1 text-sm border rounded active">1日</button>
+                        <button onclick="changeTimeframe('5D')" class="timeframe-btn px-3 py-1 text-sm border rounded">5日</button>
+                        <button onclick="changeTimeframe('1M')" class="timeframe-btn px-3 py-1 text-sm border rounded">1月</button>
+                        <button onclick="changeTimeframe('3M')" class="timeframe-btn px-3 py-1 text-sm border rounded">3月</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="marketIndexChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 市場熱力圖 -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">🔥 市場熱力圖</h3>
+                <div class="chart-container">
+                    <canvas id="marketHeatmapChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 類股表現 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- 類股漲跌排行 -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">📊 類股表現排行</h3>
+                <div class="space-y-3">
+                    {{#each sectorPerformance}}
+                    <div class="flex items-center justify-between p-3 {{#if (gt this.changePercent 0)}}bg-green-50{{else}}bg-red-50{{/if}} rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-3 h-3 rounded-full {{#if (gt this.changePercent 0)}}bg-green-500{{else}}bg-red-500{{/if}}"></div>
+                            <span class="font-medium text-gray-900">{{this.sector}}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-bold {{#if (gt this.changePercent 0)}}text-green-600{{else}}text-red-600{{/if}}">
+                                {{#if (gt this.changePercent 0)}}+{{/if}}{{this.changePercent}}%
+                            </span>
+                            <p class="text-sm text-gray-600">{{this.avgPrice}}</p>
+                        </div>
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+
+            <!-- 成交量排行 -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">💰 成交量排行</h3>
+                <div class="space-y-3">
+                    {{#each volumeRanking}}
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <div class="flex items-center space-x-3">
+                            <span class="text-sm font-bold text-gray-500 w-6">{{@index}}</span>
+                            <div>
+                                <p class="font-semibold text-gray-900">{{this.symbol}}</p>
+                                <p class="text-sm text-gray-600">{{this.name}}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-gray-900">{{formatVolume this.volume}}</p>
+                            <p class="text-sm {{#if (gt this.changePercent 0)}}text-green-600{{else}}text-red-600{{/if}}">
+                                {{#if (gt this.changePercent 0)}}+{{/if}}{{this.changePercent}}%
+                            </p>
+                        </div>
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+        </div>
+
+        <!-- 技術指標統計 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h4 class="font-semibold text-gray-800 mb-3">RSI 分布</h4>
+                <div class="small-chart">
+                    <canvas id="rsiDistributionChart"></canvas>
+                </div>
+                <div class="mt-3 grid grid-cols-3 gap-2 text-center">
+                    <div>
+                        <p class="text-sm text-gray-600">超賣</p>
+                        <p class="font-bold text-green-600">{{technicalStats.rsiOversold}}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">正常</p>
+                        <p class="font-bold text-blue-600">{{technicalStats.rsiNormal}}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">超買</p>
+                        <p class="font-bold text-red-600">{{technicalStats.rsiOverbought}}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h4 class="font-semibold text-gray-800 mb-3">MACD 信號</h4>
+                <div class="small-chart">
+                    <canvas id="macdSignalChart"></canvas>
+                </div>
+                <div class="mt-3 grid grid-cols-2 gap-2 text-center">
+                    <div>
+                        <p class="text-sm text-gray-600">黃金交叉</p>
+                        <p class="font-bold text-green-600">{{technicalStats.macdBuy}}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">死亡交叉</p>
+                        <p class="font-bold text-red-600">{{technicalStats.macdSell}}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h4 class="font-semibold text-gray-800 mb-3">KD 指標</h4>
+                <div class="small-chart">
+                    <canvas id="kdSignalChart"></canvas>
+                </div>
+                <div class="mt-3 grid grid-cols-2 gap-2 text-center">
+                    <div>
+                        <p class="text-sm text-gray-600">黃金交叉</p>
+                        <p class="font-bold text-green-600">{{technicalStats.kdGolden}}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-600">死亡交叉</p>
+                        <p class="font-bold text-red-600">{{technicalStats.kdDeath}}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h4 class="font-semibold text-gray-800 mb-3">布林帶位置</h4>
+                <div class="small-chart">
+                    <canvas id="bollingerChart"></canvas>
+                </div>
+                <div class="mt-3 grid grid-cols-3 gap-1 text-center">
+                    <div>
+                        <p class="text-xs text-gray-600">上軌</p>
+                        <p class="font-bold text-red-600">{{technicalStats.bollingerUpper}}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-600">中軌</p>
+                        <p class="font-bold text-blue-600">{{technicalStats.bollingerMiddle}}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-600">下軌</p>
+                        <p class="font-bold text-green-600">{{technicalStats.bollingerLower}}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 最新資訊 -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold text-gray-800">📰 最新市場動態</h3>
+                <span class="text-sm text-gray-600">更新時間: {{lastUpdate}}</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="p-4 bg-blue-50 rounded-lg">
+                    <h4 class="font-semibold text-blue-800 mb-2">今日焦點</h4>
+                    <ul class="space-y-2">
+                        {{#each todayHighlights}}
+                        <li class="text-sm text-gray-700">• {{this}}</li>
+                        {{/each}}
+                    </ul>
+                </div>
+                <div class="p-4 bg-green-50 rounded-lg">
+                    <h4 class="font-semibold text-green-800 mb-2">強勢股票</h4>
+                    <ul class="space-y-2">
+                        {{#each strongStocks}}
+                        <li class="text-sm text-gray-700 flex justify-between">
+                            <span>{{this.symbol}}</span>
+                            <span class="text-green-600">+{{this.changePercent}}%</span>
+                        </li>
+                        {{/each}}
+                    </ul>
+                </div>
+                <div class="p-4 bg-red-50 rounded-lg">
+                    <h4 class="font-semibold text-red-800 mb-2">弱勢股票</h4>
+                    <ul class="space-y-2">
+                        {{#each weakStocks}}
+                        <li class="text-sm text-gray-700 flex justify-between">
+                            <span>{{this.symbol}}</span>
+                            <span class="text-red-600">{{this.changePercent}}%</span>
+                        </li>
+                        {{/each}}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval;
+        let isAutoRefresh = false;
+
+        // 格式化億元
+        function formatBillion(value) {
+            return (value / 100000000).toFixed(2);
+        }
+
+        // 格式化成交量
+        function formatVolume(volume) {
+            if (volume >= 1000000) {
+                return (volume / 1000000).toFixed(2) + 'M';
+            } else if (volume >= 1000) {
+                return (volume / 1000).toFixed(2) + 'K';
+            }
+            return volume;
+        }
+
+        // 自動刷新
+        function autoRefresh() {
+            const btn = document.getElementById('refreshBtn');
+            if (isAutoRefresh) {
+                clearInterval(autoRefreshInterval);
+                btn.textContent = '🔄 自動刷新: 關閉';
+                btn.classList.remove('bg-green-700');
+                btn.classList.add('bg-blue-700');
+                isAutoRefresh = false;
+            } else {
+                autoRefreshInterval = setInterval(() => {
+                    location.reload();
+                }, 30000); // 30秒刷新
+                btn.textContent = '🔄 自動刷新: 30秒';
+                btn.classList.remove('bg-blue-700');
+                btn.classList.add('bg-green-700');
+                isAutoRefresh = true;
+            }
+        }
+
+        // 時間框架改變
+        function changeTimeframe(timeframe) {
+            document.querySelectorAll('.timeframe-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-blue-500', 'text-white');
+            });
+            event.target.classList.add('active', 'bg-blue-500', 'text-white');
+            
+            // 重新載入對應時間框架的數據
+            loadChartData(timeframe);
+        }
+
+        // 載入圖表數據
+        function loadChartData(timeframe) {
+            fetch(`/api/chart/market-index?timeframe=${timeframe}`)
+                .then(response => response.json())
+                .then(data => {
+                    updateMarketIndexChart(data);
+                });
+        }
+
+        // 初始化所有圖表
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+        });
+
+        function initializeCharts() {
+            // 初始化市場指數圖
+            initMarketIndexChart();
+            
+            // 初始化熱力圖
+            initHeatmapChart();
+            
+            // 初始化技術指標分布圖
+            initTechnicalDistributionCharts();
+        }
+
+        function initMarketIndexChart() {
+            const ctx = document.getElementById('marketIndexChart').getContext('2d');
+            fetch('/api/chart/market-index')
+                .then(response => response.json())
+                .then(data => {
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: data,
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                },
+                                title: {
+                                    display: false
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: false
+                                }
+                            }
+                        }
+                    });
+                });
+        }
+
+        function initHeatmapChart() {
+            // 市場熱力圖實現
+        }
+
+        function initTechnicalDistributionCharts() {
+            // RSI分布圖
+            const rsiCtx = document.getElementById('rsiDistributionChart').getContext('2d');
+            new Chart(rsiCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['超賣', '正常', '超買'],
+                    datasets: [{
+                        data: [{{technicalStats.rsiOversold}}, {{technicalStats.rsiNormal}}, {{technicalStats.rsiOverbought}}],
+                        backgroundColor: ['#10b981', '#3b82f6', '#ef4444']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            // MACD信號圖
+            const macdCtx = document.getElementById('macdSignalChart').getContext('2d');
+            new Chart(macdCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['買進', '賣出'],
+                    datasets: [{
+                        data: [{{technicalStats.macdBuy}}, {{technicalStats.macdSell}}],
+                        backgroundColor: ['#10b981', '#ef4444']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

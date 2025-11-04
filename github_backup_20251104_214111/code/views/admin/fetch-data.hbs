@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        .loading {
+            display: none;
+        }
+        .loading.show {
+            display: inline-block;
+        }
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-blue-600 text-white p-4">
+        <div class="container mx-auto">
+            <h1 class="text-2xl font-bold">🏛️ 台灣股市資料收集系統</h1>
+            <p class="text-blue-200">管理面板 - 手動資料抓取</p>
+        </div>
+    </nav>
+
+    <div class="container mx-auto mt-8 p-4">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">📊 資料抓取控制台</h2>
+            
+            <!-- 單日抓取 -->
+            <div class="mb-8 border-b border-gray-200 pb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">🎯 單日資料抓取</h3>
+                <div class="flex items-center space-x-4">
+                    <input 
+                        type="date" 
+                        id="singleDate" 
+                        value="{{currentDate}}"
+                        class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                    <button 
+                        onclick="fetchSingleDay()" 
+                        class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-md transition duration-200"
+                    >
+                        <span id="singleBtn">抓取資料</span>
+                        <span id="singleLoading" class="loading">
+                            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            處理中...
+                        </span>
+                    </button>
+                </div>
+                <div id="singleResult" class="mt-4"></div>
+            </div>
+
+            <!-- 批次抓取 -->
+            <div class="mb-8 border-b border-gray-200 pb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">📅 批次日期範圍抓取</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">開始日期</label>
+                        <input 
+                            type="date" 
+                            id="startDate" 
+                            class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">結束日期</label>
+                        <input 
+                            type="date" 
+                            id="endDate" 
+                            value="{{currentDate}}"
+                            class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                    </div>
+                    <div>
+                        <button 
+                            onclick="fetchDateRange()" 
+                            class="w-full bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-md transition duration-200"
+                        >
+                            <span id="rangeBtn">批次抓取</span>
+                            <span id="rangeLoading" class="loading">
+                                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                處理中...
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                <div id="rangeResult" class="mt-4"></div>
+            </div>
+
+            <!-- 快速選擇 -->
+            <div class="mb-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">⚡ 快速選擇</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <button onclick="setDateRange(1)" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm transition duration-200">最近1天</button>
+                    <button onclick="setDateRange(3)" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm transition duration-200">最近3天</button>
+                    <button onclick="setDateRange(7)" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm transition duration-200">最近7天</button>
+                    <button onclick="setDateRange(30)" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-md text-sm transition duration-200">最近30天</button>
+                </div>
+            </div>
+
+            <!-- 建議日期 -->
+            <div class="bg-blue-50 p-4 rounded-lg">
+                <h4 class="text-lg font-medium text-blue-800 mb-2">💡 建議抓取日期 (最近的工作日)</h4>
+                <div class="flex flex-wrap gap-2">
+                    {{#each workingDays}}
+                    <button 
+                        onclick="document.getElementById('singleDate').value='{{this}}'; fetchSingleDay();" 
+                        class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded-md text-sm transition duration-200"
+                    >
+                        {{this}}
+                    </button>
+                    {{/each}}
+                </div>
+            </div>
+        </div>
+
+        <!-- 結果顯示區域 -->
+        <div id="resultsContainer" class="mt-6" style="display: none;">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-700 mb-4">📋 執行結果</h3>
+                <div id="resultsContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 設定日期範圍
+        function setDateRange(days) {
+            const today = new Date();
+            const startDate = new Date(today);
+            startDate.setDate(today.getDate() - days);
+            
+            document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+            document.getElementById('endDate').value = today.toISOString().split('T')[0];
+        }
+
+        // 單日抓取
+        async function fetchSingleDay() {
+            const date = document.getElementById('singleDate').value;
+            if (!date) {
+                alert('請選擇日期');
+                return;
+            }
+
+            showLoading('single');
+            
+            try {
+                const response = await axios.post('/admin/fetch-single-day', { date });
+                showResult('single', response.data);
+            } catch (error) {
+                showResult('single', { success: false, message: '網路錯誤: ' + error.message });
+            }
+            
+            hideLoading('single');
+        }
+
+        // 批次抓取
+        async function fetchDateRange() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (!startDate || !endDate) {
+                alert('請選擇開始和結束日期');
+                return;
+            }
+            
+            if (new Date(startDate) > new Date(endDate)) {
+                alert('開始日期不能晚於結束日期');
+                return;
+            }
+
+            showLoading('range');
+            
+            try {
+                const response = await axios.post('/admin/fetch-date-range', { startDate, endDate });
+                showBatchResult(response.data);
+            } catch (error) {
+                showResult('range', { success: false, message: '網路錯誤: ' + error.message });
+            }
+            
+            hideLoading('range');
+        }
+
+        // 顯示載入狀態
+        function showLoading(type) {
+            document.getElementById(type + 'Btn').style.display = 'none';
+            document.getElementById(type + 'Loading').classList.add('show');
+        }
+
+        // 隱藏載入狀態
+        function hideLoading(type) {
+            document.getElementById(type + 'Btn').style.display = 'inline';
+            document.getElementById(type + 'Loading').classList.remove('show');
+        }
+
+        // 顯示單一結果
+        function showResult(type, result) {
+            const resultDiv = document.getElementById(type + 'Result');
+            const alertClass = result.success ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700';
+            const icon = result.success ? '✅' : '❌';
+            
+            resultDiv.innerHTML = `
+                <div class="border-l-4 p-4 ${alertClass}">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <span class="text-lg">${icon}</span>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium">${result.message}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 顯示批次結果
+        function showBatchResult(data) {
+            const container = document.getElementById('resultsContainer');
+            const content = document.getElementById('resultsContent');
+            
+            if (data.results && data.results.length > 0) {
+                let html = '<div class="space-y-2">';
+                data.results.forEach(result => {
+                    const alertClass = result.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200';
+                    const textClass = result.success ? 'text-green-800' : 'text-red-800';
+                    const icon = result.success ? '✅' : '❌';
+                    
+                    html += `
+                        <div class="border rounded-md p-3 ${alertClass}">
+                            <div class="flex items-center justify-between">
+                                <span class="font-medium ${textClass}">${result.date}</span>
+                                <span class="text-sm ${textClass}">${icon} ${result.message}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                
+                content.innerHTML = html;
+                container.style.display = 'block';
+                container.scrollIntoView({ behavior: 'smooth' });
+            } else {
+                showResult('range', data);
+            }
+        }
+
+        // 頁面載入完成後設定預設的開始日期
+        document.addEventListener('DOMContentLoaded', function() {
+            setDateRange(7); // 預設最近7天
+        });
+    </script>
+</body>
+</html>
